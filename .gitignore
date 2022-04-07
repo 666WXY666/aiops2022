@@ -1,0 +1,6 @@
+wandb/
+.ipynb_checkpoint/
+*.pyc
+/model
+/data
+/result/visualization

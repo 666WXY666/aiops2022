@@ -5,7 +5,7 @@ Version:
 Author: WangXingyu
 Date: 2022-04-21 12:23:08
 LastEditors: WangXingyu
-LastEditTime: 2022-04-21 12:23:10
+LastEditTime: 2022-04-21 22:30:52
 '''
 import json
 import time
@@ -184,7 +184,7 @@ def test(t):
         print(len(test), test)
 
         metric_list = []
-        for i in reversed(range(5)):
+        for i in [1, 0, -1]:
             metric_list += metric_d.get(current_time - i * 60, [])
         metric_df = pd.DataFrame(metric_list, columns=[
                                  'service', 'timestamp', 'rr', 'sr', 'count', 'mrt'])
@@ -215,7 +215,7 @@ def data_deal():
     Thread(target=trace).start()
     Thread(target=log).start()
     Thread(target=clean, args=[30]).start()
-    Thread(target=test, args=[5]).start()
+    Thread(target=test, args=[1]).start()
 
 
 if __name__ == '__main__':

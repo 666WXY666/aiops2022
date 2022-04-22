@@ -5,7 +5,7 @@ Version:
 Author: WangXingyu
 Date: 2022-04-21 12:23:08
 LastEditors: WangXingyu
-LastEditTime: 2022-04-21 22:30:52
+LastEditTime: 2022-04-22 23:06:29
 '''
 import json
 import time
@@ -14,7 +14,7 @@ from collections import OrderedDict
 from threading import Thread
 
 import pandas as pd
-import requests
+import schedule
 from kafka import KafkaConsumer
 
 ips = ['10.3.2.41', '10.3.2.4', '10.3.2.36']
@@ -22,18 +22,6 @@ kpi_d = OrderedDict()
 metric_d = OrderedDict()
 trace_d = OrderedDict()
 log_d = OrderedDict()
-
-
-# def submit(ctx):
-#     assert (isinstance(ctx, list))
-#     for tp in ctx:
-#         assert (isinstance(tp, list))
-#         assert (len(tp) == 2)
-#         assert (isinstance(tp[0], str))
-#         assert (isinstance(tp[1], str) or (tp[1] is None))
-#     data = {'content': json.dumps(ctx)}
-#     r = requests.post('http://10.3.2.25:5000/standings/submit/', data=json.dumps(data))
-#     return r.text
 
 
 def kpi():
@@ -152,7 +140,7 @@ def clean(no):
     """
     while True:
         for d in [kpi_d, metric_d, trace_d, log_d]:
-            if len(d) > no:
+            while len(d) > no:
                 try:
                     d.popitem(last=False)
                 except Exception:
@@ -160,63 +148,65 @@ def clean(no):
         time.sleep(30)
 
 
-def test(t):
+def test():
     """
     test
-    @param t: test time delay
     """
-    while True:
-        current_time = int(time.time())
-        current_time = current_time - current_time % 60
-        print(current_time)
+    current_time = int(time.time())
+    print(time.strftime('%H:%M:%S', time.localtime(current_time)))
+    current_time = current_time - current_time % 60
+    print(current_time)
 
-        kpi_list = []
-        for i in reversed(range(7)):
-            kpi_list += kpi_d.get(current_time - i * 60, [])
-        kpi_df = pd.DataFrame(
-            kpi_list, columns=['timestamp', 'cmdb_id', 'kpi_name', 'value'])
+    kpi_list = kpi_d.get(current_time - 60, [])
+    kpi_df = pd.DataFrame(
+        kpi_list, columns=['timestamp', 'cmdb_id', 'kpi_name', 'value'])
+
+    metric_list = metric_d.get(current_time - 60, [])
+    metric_df = pd.DataFrame(metric_list, columns=[
+                             'service', 'timestamp', 'rr', 'sr', 'count', 'mrt'])
+
+    trace_list = trace_d.get(current_time - 60, [])
+    trace_df = pd.DataFrame(trace_list, columns=[
+                            'timestamp', 'cmdb_id', 'span_id', 'trace_id', 'duration', 'type', 'status_code', 'operation_name', 'parent_span'])
+
+    log_list = log_d.get(current_time - 60, [])
+    log_df = pd.DataFrame(
+        log_list, columns=['log_id', 'timestamp', 'cmdb_id', 'log_name', 'value'])
+
+    if not (kpi_df.empty or metric_df.empty or trace_df.empty or log_df.empty):
         print('kpi:\n', kpi_df.drop_duplicates(['timestamp'])['timestamp'])
-        kpi_df['kpi_new_name'] = kpi_df['kpi_name']
-        kpi_df['kpi_new_name'] = kpi_df['kpi_new_name'].apply(
-            lambda x: 'istio_request_duration_milliseconds' if 'istio_request_duration_milliseconds' in x else x)
-        test = kpi_df[kpi_df['kpi_new_name'] ==
-                      'istio_request_duration_milliseconds']
-        print(len(test), test)
-
-        metric_list = []
-        for i in [1, 0, -1]:
-            metric_list += metric_d.get(current_time - i * 60, [])
-        metric_df = pd.DataFrame(metric_list, columns=[
-                                 'service', 'timestamp', 'rr', 'sr', 'count', 'mrt'])
+        kpi_df['new'] = kpi_df['kpi_name']
+        kpi_df['new'] = kpi_df['new'].apply(
+            lambda x: 'network' if 'network' in x else x)
+        kpi_df = kpi_df[kpi_df['new'] == 'network']
+        print(kpi_df)
         print('metric:\n', metric_df.drop_duplicates(
             ['timestamp'])['timestamp'])
-
-        trace_list = []
-        for i in reversed(range(6)):
-            trace_list += trace_d.get(current_time - i * 60, [])
-        trace_df = pd.DataFrame(trace_list, columns=[
-                                'timestamp', 'cmdb_id', 'span_id', 'trace_id', 'duration', 'type', 'status_code', 'operation_name', 'parent_span'])
-        print('trace:\n', trace_df.drop_duplicates(['timestamp'])['timestamp'])
-
-        log_list = []
-        for i in reversed(range(7)):
-            log_list += log_d.get(current_time - i * 60, [])
-        log_df = pd.DataFrame(
-            log_list, columns=['log_id', 'timestamp', 'cmdb_id', 'log_name', 'value'])
-        print('log:\n', log_df.drop_duplicates(['timestamp'])['timestamp'])
-
+        trace_df.drop_duplicates(['timestamp'], inplace=True)
+        trace_df.sort_values(by='timestamp', inplace=True)
+        trace_df.reset_index(drop=True, inplace=True)
+        print('trace:\n', trace_df['timestamp'].iloc[0] //
+              1000, trace_df['timestamp'].iloc[-1]//1000)
+        log_df.drop_duplicates(['timestamp'], inplace=True)
+        log_df.sort_values(by='timestamp', inplace=True)
+        log_df.reset_index(drop=True, inplace=True)
+        print('log:\n', log_df['timestamp'].iloc[0],
+              log_df['timestamp'].iloc[-1])
         print('\n')
-        time.sleep(t)
 
 
 def data_deal():
     Thread(target=kpi).start()
     Thread(target=metric).start()
     Thread(target=trace).start()
-    Thread(target=log).start()
-    Thread(target=clean, args=[30]).start()
-    Thread(target=test, args=[1]).start()
+    # Thread(target=log).start()
+    Thread(target=clean, args=[5]).start()
+    # time.sleep(60)  # 冷启动时间
 
 
 if __name__ == '__main__':
     data_deal()
+    schedule.every().minute.at(':59').do(test)
+    while True:
+        schedule.run_pending()
+        time.sleep(1)

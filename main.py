@@ -5,7 +5,7 @@ Version:
 Author: WangXingyu
 Date: 2022-04-06 20:50:54
 LastEditors: WangXingyu
-LastEditTime: 2022-04-24 16:54:42
+LastEditTime: 2022-04-24 18:42:41
 '''
 import os
 import time
@@ -31,6 +31,8 @@ is_anomaly = {i: 0 for i in nodes+pods+services}
 WAIT_FLAG = False
 
 fault_count = 0
+fault_timestamp = 0
+fault_num = 0
 
 type2id = {
     'k8s容器cpu负载': 0,
@@ -116,10 +118,12 @@ def main(train=True, type='online', run_i=0):
                 kpi_list, columns=['timestamp', 'cmdb_id', 'kpi_name', 'value'])
             print('df_kpi:\n', df_kpi)
 
+            df_kpi_10min_list = []
             for i in reversed(range(1, 11)):
-                df_kpi_10min_list = kpi_d.get(current_time - i*60, [])
+                df_kpi_10min_list += kpi_d.get(current_time - i*60, [])
             df_kpi_10min = pd.DataFrame(
                 df_kpi_10min_list, columns=['timestamp', 'cmdb_id', 'kpi_name', 'value'])
+            print('df_kpi_10min:\n', df_kpi_10min)
 
             metric_list = metric_d.get(current_time - 60, [])
             df_service = pd.DataFrame(metric_list, columns=[
@@ -178,18 +182,19 @@ def main(train=True, type='online', run_i=0):
                 istio_kpis)].reset_index(drop=True)
             print('df_rca:\n', df_rca)
             print('df_istio:\n', df_istio)
+
+            rca_timestamp = df_rca.drop_duplicates(
+                ['timestamp'])['timestamp'].to_list()
+            print('rca_timestamp:\n', rca_timestamp)
         else:
             df_node = pd.DataFrame()
             df_pod = pd.DataFrame()
             df_rca = pd.DataFrame()
             df_istio = pd.DataFrame()
+            rca_timestamp = []
 
     if train:
         rca_timestamp = []
-    else:
-        rca_timestamp = df_rca.drop_duplicates(
-            ['timestamp'])['timestamp'].to_list()
-        print('rca_timestamp:\n', rca_timestamp)
 
     if train or not(df_node.empty or df_service.empty or df_pod.empty or len(rca_timestamp) < 10):
         df_node = get_raw_data(df_node, type='node', train=train)
@@ -249,7 +254,12 @@ def main(train=True, type='online', run_i=0):
             if fault_flag:
                 global fault_count
                 fault_count += 1
-                if fault_count == 2:
+                global fault_num
+                fault_num += 1
+                global fault_timestamp
+                if fault_num == 1:
+                    fault_timestamp = current_time
+                if fault_count == 2 and current_time-fault_timestamp < 60*5:
                     fault_count = 0
                     rca = PageRCA(ts=current_time-60,
                                   fDict=anomaly_dict, responds=df_istio, metric=df_rca)
@@ -260,18 +270,23 @@ def main(train=True, type='online', run_i=0):
                     type_ans = list(map(lambda x: id2type[x], type_ans))[0]
                     print('type_ans:', type_ans)
 
-                    code = submit([str(cmdb_ans), str(type_ans)])
-                    print('return_code:', code)
+                    if type == 'online':
+                        code = submit([str(cmdb_ans), str(type_ans)])
+                        print('return_code:', code)
+
                     print('current_time:', time.strftime(
                         '%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
                     print('fault_time:', time.strftime(
                         '%Y-%m-%d %H:%M:%S', time.localtime(current_time)))
+                    print('total_fault_num:', fault_num)
 
                     WAIT_FLAG = True
 
+                fault_timestamp = current_time
+
 
 if __name__ == '__main__':
-    type = 'offline_test'
+    type = 'online_test'
     if type == 'train':
         main(True)
 

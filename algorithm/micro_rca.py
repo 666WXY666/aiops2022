@@ -5,7 +5,7 @@ Version:
 Author: WangXingyu
 Date: 2022-04-23 23:17:59
 LastEditors: WangXingyu
-LastEditTime: 2022-04-24 16:28:24
+LastEditTime: 2022-04-24 18:41:52
 '''
 
 import math
@@ -170,12 +170,16 @@ class PageRCA():
     def del_responds(self, responds):
         res_out = pd.DataFrame(data=None, columns={
                                'timestamp', 'cmdb_id', 'value'})
-        ts = responds['timestamp'].value_counts().index
+        responds_pd = responds.copy()
+        ts = responds_pd['timestamp'].value_counts().index
+        responds_pd['value'] = responds_pd['value'].astype('float')
         for t in ts:
-            t_pd = responds.loc[responds['timestamp'] == t]
+            t_pd = responds_pd.loc[responds_pd['timestamp'] == t]
             cmdb_index = t_pd['cmdb_id'].value_counts().index
             for cmdb in cmdb_index:
                 c_pd = t_pd.loc[t_pd['cmdb_id'] == cmdb]['value']
+                if len(c_pd) > 0:
+                    c_pd = c_pd.astype('float')
                 ts = c_pd.sum() if len(c_pd) > 1 else c_pd.item()
                 res = {
                     'timestamp': t,
@@ -544,6 +548,24 @@ class PageRCA():
 
         return res_out
 
+    def svc_add_rule(self, etype):
+        if etype == 'svc':
+            return 'svc'
+        fPods = self.fPods
+        pod_pd = self.pod_pd
+        svcList = pod_pd['svc'].value_counts().index.to_list()
+        svc_pods_num = pod_pd['svc'].value_counts().values.to_list()
+        for svc, num in zip(svcList, svc_pods_num):
+            p_num = 0
+            for p in fPods:
+                p_svc = p.split('-')[0]
+                if p_svc == svc:
+                    p_num += 1
+                    if p_num == num:
+                        return 'svc'
+
+        return etype
+
     def do_rca(self, pos_pd=None):
         fDict = self.fDict
         if len(fDict['node']) != 0:
@@ -553,6 +575,8 @@ class PageRCA():
         else:
             ftype = 'pod'
         if not self.BREAK_L:
+            ftype = self.svc_add_rule(etype=ftype)
+
             print('Start RCA:\nTime:{}\nfPods:{}'.format(self.ts, self.fPods))
             mpg = self.get_full_mpg()
             sub_mpg = self.get_sub_mpg()
@@ -564,9 +588,12 @@ class PageRCA():
             ans_out = self.rule_res_out(out, etype=ftype)
 
             print("fPods: {}".format(self.fPods))
+            if ftype == 'svc':
+                ans_out = [i for i in ans_out if i >= 'A' and i <= 'z']
+
             return ans_out
         else:
-            return [(self.node, 1.0)], self.node
+            return self.node
 
 
 class ScanMpg():

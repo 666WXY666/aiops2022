@@ -12,3 +12,4 @@ networkx==2.8
 sklearn
 scipy==1.8.0
 catboost==1.0.5
+tqdm

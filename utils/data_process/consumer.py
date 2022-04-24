@@ -5,7 +5,7 @@ Version:
 Author: WangXingyu
 Date: 2022-04-21 12:23:08
 LastEditors: WangXingyu
-LastEditTime: 2022-04-22 23:06:29
+LastEditTime: 2022-04-24 15:56:28
 '''
 import json
 import time
@@ -198,9 +198,9 @@ def test():
 def data_deal():
     Thread(target=kpi).start()
     Thread(target=metric).start()
-    Thread(target=trace).start()
+    # Thread(target=trace).start()
     # Thread(target=log).start()
-    Thread(target=clean, args=[5]).start()
+    Thread(target=clean, args=[50]).start()
     # time.sleep(60)  # 冷启动时间
 
 

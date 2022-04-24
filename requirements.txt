@@ -8,4 +8,7 @@ torchaudio==0.9.0
 torchvision==0.10.0
 schedule==1.1.0
 joblib==1.1.0
+networkx==2.8
 sklearn
+scipy==1.8.0
+catboost==1.0.5

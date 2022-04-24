@@ -5,7 +5,7 @@ Version:
 Author: WangXingyu
 Date: 2022-04-06 20:50:54
 LastEditors: WangXingyu
-LastEditTime: 2022-04-24 18:42:41
+LastEditTime: 2022-04-24 21:34:19
 '''
 import os
 import time
@@ -104,37 +104,61 @@ def main(train=True, type='online', run_i=0):
         df_pod['kpi_name'] = df_pod['kpi_name'].apply(
             lambda x: x.split('./')[0])
 
-        print(df_node, df_service, df_pod)
+        print('df_node:\n', df_node)
+        print('df_service:\n', df_service)
+        print('df_pod:\n', df_pod)
+
     else:
+        current_time = int(time.time())
+        print('current_timestamp:', current_time)
+        print('current_time:', time.strftime(
+            '%H:%M:%S', time.localtime(current_time)))
+
         if type == 'online':
             global WAIT_FLAG
-            current_time = int(time.time())
-            print(time.strftime('%H:%M:%S', time.localtime(current_time)))
-            current_time = current_time - current_time % 60
-            print(current_time)
 
-            kpi_list = kpi_d.get(current_time - 60, [])
-            df_kpi = pd.DataFrame(
-                kpi_list, columns=['timestamp', 'cmdb_id', 'kpi_name', 'value'])
-            print('df_kpi:\n', df_kpi)
+            if len(kpi_d) >= 10 and len(metric_d) > 0:
+                kpi_time = next(reversed(kpi_d))
+                metric_time = next(reversed(metric_d))
 
-            df_kpi_10min_list = []
-            for i in reversed(range(1, 11)):
-                df_kpi_10min_list += kpi_d.get(current_time - i*60, [])
-            df_kpi_10min = pd.DataFrame(
-                df_kpi_10min_list, columns=['timestamp', 'cmdb_id', 'kpi_name', 'value'])
-            print('df_kpi_10min:\n', df_kpi_10min)
+                current_check_time = min(int(kpi_time), int(metric_time))
+                print('current_check_timestamp:', current_check_time)
+                print('current_check_time:', time.strftime(
+                    '%H:%M:%S', time.localtime(current_check_time)))
 
-            metric_list = metric_d.get(current_time - 60, [])
-            df_service = pd.DataFrame(metric_list, columns=[
-                'service', 'timestamp', 'rr', 'sr', 'count', 'mrt'])
-            print('df_service:\n', df_service)
+                kpi_list = kpi_d.get(current_check_time, [])
+                df_kpi = pd.DataFrame(
+                    kpi_list, columns=['timestamp', 'cmdb_id', 'kpi_name', 'value'])
+                print('df_kpi:\n', df_kpi)
+
+                df_kpi_10min_list = []
+                for i in reversed(range(10)):
+                    df_kpi_10min_list += kpi_d.get(
+                        current_check_time - i*60, [])
+                df_kpi_10min = pd.DataFrame(
+                    df_kpi_10min_list, columns=['timestamp', 'cmdb_id', 'kpi_name', 'value'])
+                print('df_kpi_10min:\n', df_kpi_10min)
+
+                metric_list = metric_d.get(current_check_time, [])
+                df_service = pd.DataFrame(metric_list, columns=[
+                    'service', 'timestamp', 'rr', 'sr', 'count', 'mrt'])
+                print('df_service:\n', df_service)
+            else:
+                current_check_time = -1
+                df_kpi = pd.DataFrame()
+                df_kpi_10min = pd.DataFrame()
+                df_service = pd.DataFrame()
+
         else:
-            current_time = 1647790210 - 1647790210 % 60
-            current_time += run_i*60
+            current_check_time = 1647790210 - 1647790210 % 60
+            current_check_time += run_i*60
+            print('current_check_timestamp:', current_check_time)
+            print('current_check_time:', time.strftime(
+                '%H:%M:%S', time.localtime(current_check_time)))
             df_service = pd.read_csv(
                 './data/training_data_with_faults/tar/2022-03-20-cloudbed1/metric/service/metric_service.csv')
-            df_service = df_service[df_service['timestamp'] == current_time]
+            df_service = df_service[df_service['timestamp']
+                                    == current_check_time]
             df_service.reset_index(drop=True, inplace=True)
             print('service:\n', df_service)
 
@@ -154,12 +178,12 @@ def main(train=True, type='online', run_i=0):
             df_pod = pd.concat(dfs_pod, ignore_index=True)
             df_kpi = pd.concat([df_node, df_pod], ignore_index=True)
 
-            df_kpi_10min = df_kpi[(df_kpi['timestamp'] >= current_time-9*60) & (
-                df_kpi['timestamp'] <= current_time)].reset_index(drop=True)
+            df_kpi_10min = df_kpi[(df_kpi['timestamp'] >= current_check_time-9*60) & (
+                df_kpi['timestamp'] <= current_check_time)].reset_index(drop=True)
             print('kpi_10min:\n', df_kpi_10min)
 
             df_kpi = df_kpi[df_kpi['timestamp'] ==
-                            current_time].reset_index(drop=True)
+                            current_check_time].reset_index(drop=True)
             print('kpi:\n', df_kpi)
 
         if not (df_kpi.empty or df_kpi_10min.empty):
@@ -258,10 +282,10 @@ def main(train=True, type='online', run_i=0):
                 fault_num += 1
                 global fault_timestamp
                 if fault_num == 1:
-                    fault_timestamp = current_time
-                if fault_count == 2 and current_time-fault_timestamp < 60*5:
+                    fault_timestamp = current_check_time
+                if fault_count == 2 and current_check_time-fault_timestamp < 60*5:
                     fault_count = 0
-                    rca = PageRCA(ts=current_time-60,
+                    rca = PageRCA(ts=current_check_time-60,
                                   fDict=anomaly_dict, responds=df_istio, metric=df_rca)
                     cmdb_ans = rca.do_rca()
                     print('cmdb_ans:', cmdb_ans)
@@ -277,12 +301,12 @@ def main(train=True, type='online', run_i=0):
                     print('current_time:', time.strftime(
                         '%Y-%m-%d %H:%M:%S', time.localtime(time.time())))
                     print('fault_time:', time.strftime(
-                        '%Y-%m-%d %H:%M:%S', time.localtime(current_time)))
+                        '%Y-%m-%d %H:%M:%S', time.localtime(current_check_time)))
                     print('total_fault_num:', fault_num)
 
                     WAIT_FLAG = True
 
-                fault_timestamp = current_time
+                fault_timestamp = current_check_time
 
 
 if __name__ == '__main__':

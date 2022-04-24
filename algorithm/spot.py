@@ -5,7 +5,7 @@ Version:
 Author: WangXingyu
 Date: 2022-04-23 18:49:49
 LastEditors: WangXingyu
-LastEditTime: 2022-04-24 13:06:37
+LastEditTime: 2022-04-24 21:50:37
 '''
 from math import floor, log
 
@@ -524,7 +524,8 @@ class SPOT:
                 if words[0] == 'node':
                     anomaly_dict['node'].append(key)
                 elif (words[1] == 'grpc' or words[1] == 'http'):
-                    anomaly_dict['service'].append(words[0])  # 服务合并
+                    if words[0] not in anomaly_dict['service']:
+                        anomaly_dict['service'].append(words[0])  # 服务合并
                 else:
                     anomaly_dict['pod'].append(key)
         if (len(anomaly_dict['service']) != 0 or len(anomaly_dict['pod']) != 0 or len(anomaly_dict['node']) != 0):

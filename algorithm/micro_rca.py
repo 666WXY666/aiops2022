@@ -5,7 +5,7 @@ Version:
 Author: WangXingyu
 Date: 2022-04-23 23:17:59
 LastEditors: WangXingyu
-LastEditTime: 2022-04-24 19:24:56
+LastEditTime: 2022-04-24 21:49:41
 '''
 
 import math
@@ -375,7 +375,9 @@ class PageRCA():
 
         for pod, data in res_dir.items():
             tmp_num = np.array(res_dir[pod])
-            res_dir[pod] = pd.Series(tmp_num.mean(axis=0))
+            res = pd.Series(tmp_num.mean(axis=0))
+            res = res.astype('float')
+            res_dir[pod] = res
 
         self.res_dir = res_dir
         return res_dir
@@ -387,6 +389,11 @@ class PageRCA():
         p = personalization
         for pod, d in sub_mpg.nodes.items():
             podCPU, podMEM, podNET = self.get_pod_metrc(pod)
+
+            podCPU['value'] = podCPU['value'].astype('float')
+            podMEM['value'] = podMEM['value'].astype('float')
+            podNET['value'] = podNET['value'].astype('float')
+
             corr_cpu = abs(podCPU['value'].corr(podLlist[pod]))
             corr_mem = abs(podMEM['value'].corr(podLlist[pod]))
             corr_net = abs(podNET['value'].corr(podLlist[pod]))

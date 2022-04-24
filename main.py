@@ -5,7 +5,7 @@ Version:
 Author: WangXingyu
 Date: 2022-04-06 20:50:54
 LastEditors: WangXingyu
-LastEditTime: 2022-04-24 21:34:19
+LastEditTime: 2022-04-24 22:10:19
 '''
 import os
 import time
@@ -24,7 +24,7 @@ from utils.data_process.process_data import (get_raw_data, istio_kpis,
                                              node_kpis, nodes, pod_kpis, pods,
                                              process_data, rca_kpis,
                                              service_kpis, services, upsample)
-from utils.submit import submit
+from utils.submit.submit import submit
 
 is_anomaly = {i: 0 for i in nodes+pods+services}
 

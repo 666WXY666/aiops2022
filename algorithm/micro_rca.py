@@ -5,7 +5,7 @@ Version:
 Author: WangXingyu
 Date: 2022-04-23 23:17:59
 LastEditors: WangXingyu
-LastEditTime: 2022-04-24 18:41:52
+LastEditTime: 2022-04-24 19:24:56
 '''
 
 import math
@@ -553,8 +553,8 @@ class PageRCA():
             return 'svc'
         fPods = self.fPods
         pod_pd = self.pod_pd
-        svcList = pod_pd['svc'].value_counts().index.to_list()
-        svc_pods_num = pod_pd['svc'].value_counts().values.to_list()
+        svcList = pod_pd['svc'].value_counts().index.tolist()
+        svc_pods_num = pod_pd['svc'].value_counts().values.tolist()
         for svc, num in zip(svcList, svc_pods_num):
             p_num = 0
             for p in fPods:

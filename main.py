@@ -4,8 +4,8 @@ Description:
 Version: 
 Author: WangXingyu
 Date: 2022-04-06 20:50:54
-LastEditors: WangXingyu
-LastEditTime: 2022-04-24 22:10:19
+LastEditors: Please set LastEditors
+LastEditTime: 2022-04-25 17:54:47
 '''
 import os
 import time
@@ -33,6 +33,9 @@ WAIT_FLAG = False
 fault_count = 0
 fault_timestamp = 0
 fault_num = 0
+
+current_check_time = -1
+
 
 type2id = {
     'k8s容器cpu负载': 0,
@@ -120,29 +123,36 @@ def main(train=True, type='online', run_i=0):
             if len(kpi_d) >= 10 and len(metric_d) > 0:
                 kpi_time = next(reversed(kpi_d))
                 metric_time = next(reversed(metric_d))
+                
+                global current_check_time
+                newest_time = min(int(kpi_time), int(metric_time))
+                if newest_time != current_check_time:
+                    current_check_time = newest_time
+                    print('current_check_timestamp:', current_check_time)
+                    print('current_check_time:', time.strftime(
+                        '%H:%M:%S', time.localtime(current_check_time)))
 
-                current_check_time = min(int(kpi_time), int(metric_time))
-                print('current_check_timestamp:', current_check_time)
-                print('current_check_time:', time.strftime(
-                    '%H:%M:%S', time.localtime(current_check_time)))
+                    kpi_list = kpi_d.get(current_check_time, [])
+                    df_kpi = pd.DataFrame(
+                        kpi_list, columns=['timestamp', 'cmdb_id', 'kpi_name', 'value'])
+                    print('df_kpi:\n', df_kpi)
 
-                kpi_list = kpi_d.get(current_check_time, [])
-                df_kpi = pd.DataFrame(
-                    kpi_list, columns=['timestamp', 'cmdb_id', 'kpi_name', 'value'])
-                print('df_kpi:\n', df_kpi)
+                    df_kpi_10min_list = []
+                    for i in reversed(range(10)):
+                        df_kpi_10min_list += kpi_d.get(
+                            current_check_time - i*60, [])
+                    df_kpi_10min = pd.DataFrame(
+                        df_kpi_10min_list, columns=['timestamp', 'cmdb_id', 'kpi_name', 'value'])
+                    print('df_kpi_10min:\n', df_kpi_10min)
 
-                df_kpi_10min_list = []
-                for i in reversed(range(10)):
-                    df_kpi_10min_list += kpi_d.get(
-                        current_check_time - i*60, [])
-                df_kpi_10min = pd.DataFrame(
-                    df_kpi_10min_list, columns=['timestamp', 'cmdb_id', 'kpi_name', 'value'])
-                print('df_kpi_10min:\n', df_kpi_10min)
-
-                metric_list = metric_d.get(current_check_time, [])
-                df_service = pd.DataFrame(metric_list, columns=[
-                    'service', 'timestamp', 'rr', 'sr', 'count', 'mrt'])
-                print('df_service:\n', df_service)
+                    metric_list = metric_d.get(current_check_time, [])
+                    df_service = pd.DataFrame(metric_list, columns=[
+                        'service', 'timestamp', 'rr', 'sr', 'count', 'mrt'])
+                    print('df_service:\n', df_service)
+                else:
+                    df_kpi = pd.DataFrame()
+                    df_kpi_10min = pd.DataFrame()
+                    df_service = pd.DataFrame()
             else:
                 current_check_time = -1
                 df_kpi = pd.DataFrame()
@@ -283,9 +293,9 @@ def main(train=True, type='online', run_i=0):
                 global fault_timestamp
                 if fault_num == 1:
                     fault_timestamp = current_check_time
-                if fault_count == 2 and current_check_time-fault_timestamp < 60*5:
+                if fault_count >= 2 and current_check_time-fault_timestamp <= 60*3:
                     fault_count = 0
-                    rca = PageRCA(ts=current_check_time-60,
+                    rca = PageRCA(ts=current_check_time,
                                   fDict=anomaly_dict, responds=df_istio, metric=df_rca)
                     cmdb_ans = rca.do_rca()
                     print('cmdb_ans:', cmdb_ans)
@@ -310,7 +320,7 @@ def main(train=True, type='online', run_i=0):
 
 
 if __name__ == '__main__':
-    type = 'online_test'
+    type = 'train'
     if type == 'train':
         main(True)
 
@@ -323,7 +333,7 @@ if __name__ == '__main__':
                 WAIT_FLAG = False
                 schedule.clear()
                 print('wait for 5 minutes...')
-                time.sleep(60*5)
+                time.sleep(60*10)
                 schedule.every().minute.at(':59').do(main, False, 'online')
 
                 fault_count = 0

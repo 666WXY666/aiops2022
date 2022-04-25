@@ -4,8 +4,8 @@ Description:
 Version: 
 Author: WangXingyu
 Date: 2022-04-23 18:49:49
-LastEditors: WangXingyu
-LastEditTime: 2022-04-24 21:50:37
+LastEditors: Please set LastEditors
+LastEditTime: 2022-04-25 17:43:05
 '''
 from math import floor, log
 
@@ -472,7 +472,7 @@ class SPOT:
                 data = data[100:400]
                 n_init = int(len(data)*3/4)
             else:
-                n_init = int(1440*3/4)
+                n_init = 1440
             init_data = data[:n_init]
             _data = data[n_init:]
             self.fit(init_data, _data)
@@ -519,7 +519,7 @@ class SPOT:
         anomaly_dict = {'service': [], 'pod': [], 'node': []}
         fault_flag = False  # 判定是否异常条件: 连续两个点异常
         for key, value in abn_dict.items():
-            if value == 2:
+            if value == 1:
                 words = key.split('-')
                 if words[0] == 'node':
                     anomaly_dict['node'].append(key)

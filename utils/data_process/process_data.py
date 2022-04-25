@@ -4,8 +4,8 @@ Description:
 Version: 
 Author: WangChengsen
 Date: 2022-04-21 22:40:10
-LastEditors: WangXingyu
-LastEditTime: 2022-04-24 10:50:42
+LastEditors: Please set LastEditors
+LastEditTime: 2022-04-25 17:58:35
 '''
 import os
 from collections import defaultdict
@@ -97,7 +97,9 @@ def get_raw_data(df, type='node', train=True):
                 df.sort_values(by='node_kpi', inplace=True)
                 df.reset_index(drop=True, inplace=True)
 
-                mean = joblib.load('./model/scaler/mean.pkl')
+                # mean = joblib.load('./model/scaler/mean.pkl')
+                std_scaler= joblib.load('./model/scaler/std_scaler.pkl')
+                mean=std_scaler.mean_
 
                 df['value'] = df.apply(
                     lambda x: mean[x.name] if pd.isnull(x['value']) else x['value'], axis=1)
@@ -138,7 +140,9 @@ def get_raw_data(df, type='node', train=True):
                 df.sort_values(by='service_kpi', inplace=True)
                 df.reset_index(drop=True, inplace=True)
 
-                mean = joblib.load('./model/scaler/mean.pkl')
+                # mean = joblib.load('./model/scaler/mean.pkl')
+                std_scaler= joblib.load('./model/scaler/std_scaler.pkl')
+                mean=std_scaler.mean_
 
                 df['mrt'] = df.apply(
                     lambda x: mean[x.name+6*26] if pd.isnull(x['mrt']) else x['mrt'], axis=1)
@@ -181,7 +185,9 @@ def get_raw_data(df, type='node', train=True):
                 df.sort_values(by='pod_kpi', inplace=True)
                 df.reset_index(drop=True, inplace=True)
 
-                mean = joblib.load('./model/scaler/mean.pkl')
+                # mean = joblib.load('./model/scaler/mean.pkl')
+                std_scaler= joblib.load('./model/scaler/std_scaler.pkl')
+                mean=std_scaler.mean_
 
                 df['value'] = df.apply(
                     lambda x: mean[x.name+6*26+11] if pd.isnull(x['value']) else x['value'], axis=1)
@@ -213,19 +219,25 @@ def process_data(df, cmdbs, kpis, mode='mean', train=True, path='./model/scaler/
         os.makedirs(path)
 
     if train:
-        mean = df.iloc[:1440, :].mean().tolist()
-        mean1 = [1 if x == 0 else x for x in mean]
-        joblib.dump(mean, path + 'mean.pkl')
-        df.iloc[:, :] = np.abs((df.values-mean)/mean1)
-        # std_scaler = StandardScaler()
-        # df.iloc[:, :] = np.abs(std_scaler.fit_transform(df.values))
-        # joblib.dump(std_scaler, path + 'std_scaler.pkl')
+        std = np.std(df.iloc[1440:, :].values, axis=0)
+        random_nums = []
+        for i in range(1207):
+            random_nums.append(np.random.normal(0, 0.01*std[i],size=1440))
+        random_nums = np.array(random_nums).T
+        df.iloc[:1440, :] =  df.iloc[:1440, :] + random_nums
+        # mean = df.mean().tolist()
+        # mean1 = [1 if x == 0 else x for x in mean]
+        # joblib.dump(mean, path + 'mean.pkl')
+        # df.iloc[:, :] = np.abs((df.values-mean)/mean1)
+        std_scaler = StandardScaler()
+        df.iloc[:, :] = np.abs(std_scaler.fit_transform(df.values))
+        joblib.dump(std_scaler, path + 'std_scaler.pkl')
     else:
-        mean = joblib.load(path + 'mean.pkl')
-        mean1 = [1 if x == 0 else x for x in mean]
-        df.iloc[:, :] = np.abs((df.values-mean)/mean1)
-        # std_scaler = joblib.load(path + 'std_scaler.pkl')
-        # df.iloc[:, :] = np.abs(std_scaler.transform(df.values))
+        # mean = joblib.load(path + 'mean.pkl')
+        # mean1 = [1 if x == 0 else x for x in mean]
+        # df.iloc[:, :] = np.abs((df.values-mean)/mean1)
+        std_scaler = joblib.load(path + 'std_scaler.pkl')
+        df.iloc[:, :] = np.abs(std_scaler.transform(df.values))
 
     cmdb2kpi = defaultdict(list)
     kpi2cmdb = defaultdict(list)

@@ -5,7 +5,7 @@ Version:
 Author: WangXingyu
 Date: 2022-04-21 12:23:08
 LastEditors: WangXingyu
-LastEditTime: 2022-04-24 15:56:28
+LastEditTime: 2022-04-25 20:04:33
 '''
 import json
 import time
@@ -200,7 +200,7 @@ def data_deal():
     Thread(target=metric).start()
     # Thread(target=trace).start()
     # Thread(target=log).start()
-    Thread(target=clean, args=[50]).start()
+    Thread(target=clean, args=[100]).start()
     # time.sleep(60)  # 冷启动时间
 
 

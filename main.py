@@ -4,17 +4,19 @@ Description:
 Version: 
 Author: WangXingyu
 Date: 2022-04-06 20:50:54
-LastEditors: Please set LastEditors
-LastEditTime: 2022-04-25 17:54:47
+LastEditors: WangXingyu
+LastEditTime: 2022-04-25 22:29:38
 '''
 import os
 import time
 from collections import defaultdict
+from re import A
 
 import joblib
 import numpy as np
 import pandas as pd
 import schedule
+from sklearn.preprocessing import StandardScaler
 
 from algorithm.anomaly_catboost import CatBoost
 from algorithm.micro_rca import PageRCA
@@ -29,6 +31,7 @@ from utils.submit.submit import submit
 is_anomaly = {i: 0 for i in nodes+pods+services}
 
 WAIT_FLAG = False
+INIT_FLAG = False
 
 fault_count = 0
 fault_timestamp = 0
@@ -74,8 +77,9 @@ id2type = {
 }
 
 
-def main(train=True, type='online', run_i=0):
-    if train:
+def main(type='online_test', run_i=0):
+    # 训练
+    if type == 'train':
         df_node = pd.concat([pd.read_csv('./data/training_data_normal/cloudbed-1/metric/node/kpi_cloudbed1_metric_0319.csv'),
                              pd.read_csv(
                                  './data/training_data_with_faults/tar/2022-03-20-cloudbed1/metric/node/kpi_cloudbed1_metric_0320.csv'),
@@ -110,23 +114,29 @@ def main(train=True, type='online', run_i=0):
         print('df_node:\n', df_node)
         print('df_service:\n', df_service)
         print('df_pod:\n', df_pod)
-
+    # 离线测试和在线测试
     else:
+        print('\n-----------------------------------------------------------\n')
         current_time = int(time.time())
         print('current_timestamp:', current_time)
         print('current_time:', time.strftime(
             '%H:%M:%S', time.localtime(current_time)))
-
-        if type == 'online':
+        # 在线测试
+        if type == 'online_test':
             global WAIT_FLAG
-
+            global INIT_FLAG
             if len(kpi_d) >= 10 and len(metric_d) > 0:
                 kpi_time = next(reversed(kpi_d))
                 metric_time = next(reversed(metric_d))
-                
+
                 global current_check_time
                 newest_time = min(int(kpi_time), int(metric_time))
-                if newest_time != current_check_time:
+
+                # 一天的开始
+                if newest_time % (24*60*60) == 57600:
+                    INIT_FLAG = True
+
+                if newest_time != current_check_time and not INIT_FLAG:
                     current_check_time = newest_time
                     print('current_check_timestamp:', current_check_time)
                     print('current_check_time:', time.strftime(
@@ -137,12 +147,12 @@ def main(train=True, type='online', run_i=0):
                         kpi_list, columns=['timestamp', 'cmdb_id', 'kpi_name', 'value'])
                     print('df_kpi:\n', df_kpi)
 
-                    df_kpi_10min_list = []
+                    kpi_10min_list = []
                     for i in reversed(range(10)):
-                        df_kpi_10min_list += kpi_d.get(
+                        kpi_10min_list += kpi_d.get(
                             current_check_time - i*60, [])
                     df_kpi_10min = pd.DataFrame(
-                        df_kpi_10min_list, columns=['timestamp', 'cmdb_id', 'kpi_name', 'value'])
+                        kpi_10min_list, columns=['timestamp', 'cmdb_id', 'kpi_name', 'value'])
                     print('df_kpi_10min:\n', df_kpi_10min)
 
                     metric_list = metric_d.get(current_check_time, [])
@@ -158,44 +168,53 @@ def main(train=True, type='online', run_i=0):
                 df_kpi = pd.DataFrame()
                 df_kpi_10min = pd.DataFrame()
                 df_service = pd.DataFrame()
-
+        # 离线测试
         else:
-            current_check_time = 1647790210 - 1647790210 % 60
+            current_check_time = 1647796830 - 1647796830 % 60
             current_check_time += run_i*60
             print('current_check_timestamp:', current_check_time)
             print('current_check_time:', time.strftime(
                 '%H:%M:%S', time.localtime(current_check_time)))
-            df_service = pd.read_csv(
-                './data/training_data_with_faults/tar/2022-03-20-cloudbed1/metric/service/metric_service.csv')
+            df_service = pd.concat([pd.read_csv('./data/training_data_with_faults/tar/2022-03-20-cloudbed1/metric/service/metric_service.csv'),
+                                    pd.read_csv('./data/training_data_with_faults/tar/2022-03-21-cloudbed1/metric/service/metric_service.csv')])
             df_service = df_service[df_service['timestamp']
                                     == current_check_time]
             df_service.reset_index(drop=True, inplace=True)
-            print('service:\n', df_service)
+            print('df_service:\n', df_service)
 
-            df_node = pd.read_csv(
-                './data/training_data_with_faults/tar/2022-03-20-cloudbed1/metric/node/kpi_cloudbed1_metric_0320.csv')
+            df_node = pd.concat([pd.read_csv('./data/training_data_with_faults/tar/2022-03-20-cloudbed1/metric/node/kpi_cloudbed1_metric_0320.csv'),
+                                 pd.read_csv('./data/training_data_with_faults/tar/2022-03-21-cloudbed1/metric/node/kpi_cloudbed1_metric_0321.csv')])
+            df_node.reset_index(drop=True, inplace=True)
+
             dfs_pod = []
             for kpi in pod_kpis:
-                df_pod = pd.read_csv(
+                df_pod1 = pd.read_csv(
                     './data/training_data_with_faults/tar/2022-03-20-cloudbed1/metric/container/kpi_' + kpi.split('.')[0] + '.csv')
-                dfs_pod.append(df_pod)
+                dfs_pod.append(df_pod1)
+
+                df_pod2 = pd.read_csv(
+                    './data/training_data_with_faults/tar/2022-03-21-cloudbed1/metric/container/kpi_' + kpi.split('.')[0] + '.csv')
+                dfs_pod.append(df_pod2)
             dfs_pod.append(pd.read_csv(
                 './data/training_data_with_faults/tar/2022-03-20-cloudbed1/metric/istio/kpi_istio_request_duration_milliseconds.csv'))
             dfs_pod.append(pd.read_csv(
+                './data/training_data_with_faults/tar/2022-03-21-cloudbed1/metric/istio/kpi_istio_request_duration_milliseconds.csv'))
+            # 无用kpi模拟
+            dfs_pod.append(pd.read_csv(
                 './data/training_data_with_faults/tar/2022-03-20-cloudbed1/metric/istio/kpi_istio_agent_go_goroutines.csv'))
             dfs_pod.append(pd.read_csv(
-                './data/training_data_with_faults/tar/2022-03-20-cloudbed1/metric/jvm/kpi_java_lang_ClassLoading_TotalLoadedClassCount.csv'))
+                './data/training_data_with_faults/tar/2022-03-21-cloudbed1/metric/istio/kpi_istio_agent_go_goroutines.csv'))
             df_pod = pd.concat(dfs_pod, ignore_index=True)
             df_kpi = pd.concat([df_node, df_pod], ignore_index=True)
 
             df_kpi_10min = df_kpi[(df_kpi['timestamp'] >= current_check_time-9*60) & (
                 df_kpi['timestamp'] <= current_check_time)].reset_index(drop=True)
-            print('kpi_10min:\n', df_kpi_10min)
+            print('df_kpi_10min:\n', df_kpi_10min)
 
             df_kpi = df_kpi[df_kpi['timestamp'] ==
                             current_check_time].reset_index(drop=True)
-            print('kpi:\n', df_kpi)
-
+            print('df_kpi:\n', df_kpi)
+        # 离线测试和在线测试
         if not (df_kpi.empty or df_kpi_10min.empty):
             df_kpi['kpi_name'] = df_kpi['kpi_name'].apply(
                 lambda x: x.split('./')[0])
@@ -226,11 +245,13 @@ def main(train=True, type='online', run_i=0):
             df_rca = pd.DataFrame()
             df_istio = pd.DataFrame()
             rca_timestamp = []
+    # 训练和离线测试和在线测试
+    if type == 'train' or not(df_node.empty or df_service.empty or df_pod.empty or len(rca_timestamp) < 10):
+        if type == 'train':
+            train = True
+        else:
+            train = False
 
-    if train:
-        rca_timestamp = []
-
-    if train or not(df_node.empty or df_service.empty or df_pod.empty or len(rca_timestamp) < 10):
         df_node = get_raw_data(df_node, type='node', train=train)
         df_service = get_raw_data(df_service, type='service', train=train)
         df_pod = get_raw_data(df_pod, type='pod', train=train)
@@ -240,14 +261,13 @@ def main(train=True, type='online', run_i=0):
 
         cmdb = nodes + services + pods
         node_pod_kpis = node_kpis+pod_kpis
-        for i in ['container_fs_writes', 'container_fs_writes_MB', 'container_memory_mapped_file']:
-            node_pod_kpis.remove(i)
-        df_anomaly, df_cat = process_data(df, cmdb, node_pod_kpis, train=train)
+        df_anomaly, df_cat = process_data(df, cmdb, node_pod_kpis, type=type)
         print('df_anomaly:\n', df_anomaly)
         print('df_cat:\n', df_cat)
 
         spot = SPOT(1e-3)
         anomaly_catboost = CatBoost()
+        # 训练
         if train:
             spot.train(df_anomaly)
 
@@ -271,7 +291,7 @@ def main(train=True, type='online', run_i=0):
             cat_data_y = cat_data['failure_type']
 
             anomaly_catboost.train(cat_data_x.values, cat_data_y.values)
-
+        # 离线测试和在线测试
         else:
             res = spot.detect(df_anomaly)
 
@@ -284,7 +304,7 @@ def main(train=True, type='online', run_i=0):
             fault_flag, anomaly_dict = spot.check_anomaly(is_anomaly)
             print(fault_flag)
             print(anomaly_dict)
-
+            # 有异常
             if fault_flag:
                 global fault_count
                 fault_count += 1
@@ -295,16 +315,27 @@ def main(train=True, type='online', run_i=0):
                     fault_timestamp = current_check_time
                 if fault_count >= 2 and current_check_time-fault_timestamp <= 60*3:
                     fault_count = 0
-                    rca = PageRCA(ts=current_check_time,
-                                  fDict=anomaly_dict, responds=df_istio, metric=df_rca)
-                    cmdb_ans = rca.do_rca()
+                    anomaly_count = len(
+                        anomaly_dict['service'])+len(anomaly_dict['pod'])+len(anomaly_dict['node'])
+                    # 只检测到了一个cmdb波动，显然这个就是异常
+                    if anomaly_count == 1:
+                        for _, l in anomaly_dict.items():
+                            if len(l) > 0:
+                                cmdb_ans = l[0]
+                                break
+                    # 检测到多个cmdb波动，再进行rca判断根因是哪个
+                    else:
+                        rca = PageRCA(ts=current_check_time,
+                                      fDict=anomaly_dict, responds=df_istio, metric=df_rca)
+                        cmdb_ans = rca.do_rca()
                     print('cmdb_ans:', cmdb_ans)
 
                     type_ans = anomaly_catboost.test(df_cat.values)
                     type_ans = list(map(lambda x: id2type[x], type_ans))[0]
                     print('type_ans:', type_ans)
 
-                    if type == 'online':
+                    # 在线测试
+                    if type == 'online_test':
                         code = submit([str(cmdb_ans), str(type_ans)])
                         print('return_code:', code)
 
@@ -319,22 +350,96 @@ def main(train=True, type='online', run_i=0):
                 fault_timestamp = current_check_time
 
 
+def init_scaler():
+    while True:
+        if len(kpi_d) > 0 and len(metric_d) > 0:
+            kpi_time = next(reversed(kpi_d))
+            metric_time = next(reversed(metric_d))
+            newest_time = min(int(kpi_time), int(metric_time))
+
+            if newest_time % (24*60*60) == 61200:
+                kpi_60min_list = []
+                for i in reversed(range(60)):
+                    kpi_60min_list += kpi_d.get(
+                        newest_time - i*60, [])
+                df_kpi_60min = pd.DataFrame(
+                    kpi_60min_list, columns=['timestamp', 'cmdb_id', 'kpi_name', 'value'])
+                print('df_kpi_60min:\n', df_kpi_60min)
+
+                metric_60min_list = []
+                for i in reversed(range(60)):
+                    metric_60min_list += metric_d.get(
+                        newest_time - i*60, [])
+                df_service_60min = pd.DataFrame(
+                    metric_60min_list, columns=[
+                        'service', 'timestamp', 'rr', 'sr', 'count', 'mrt'])
+                print('df_metric_60min:\n', df_service_60min)
+
+                df_kpi_60min['kpi_name'] = df_kpi_60min['kpi_name'].apply(
+                    lambda x: x.split('./')[0])
+                df_kpi_60min['value'] = df_kpi_60min['value'].astype('float')
+                df_node_60min = df_kpi_60min[df_kpi_60min['kpi_name'].isin(
+                    node_kpis)].reset_index(drop=True)
+                df_pod_60min = df_kpi_60min[df_kpi_60min['kpi_name'].isin(
+                    pod_kpis)].reset_index(drop=True)
+
+                print('df_node_60min:\n', df_node_60min)
+                print('df_pod_60min:\n', df_pod_60min)
+
+                df_node_60min = get_raw_data(
+                    df_node_60min, type='node', train=True)
+                df_service_60min = get_raw_data(
+                    df_service_60min, type='service', train=True)
+                df_pod_60min = get_raw_data(
+                    df_pod_60min, type='pod', train=True)
+
+                df_60min = pd.concat(
+                    [df_node_60min, df_service_60min, df_pod_60min], axis=1)
+                print('df_60min:\n', df_60min)
+
+                std = joblib.load('./model/scaler/std.pkl')
+                random_nums = []
+                for i in range(1207):
+                    random_nums.append(np.random.normal(
+                        0, 0.01*std[i], size=60))
+                random_nums = np.array(random_nums).T
+                df_60min.iloc[:, :] = df_60min.values + random_nums
+                online_std_scaler = StandardScaler()
+                df_60min.iloc[:, :] = np.abs(
+                    online_std_scaler.fit_transform(df_60min.values))
+                joblib.dump(online_std_scaler,
+                            './model/scaler/online_std_scaler.pkl')
+                break
+            else:
+                time.sleep(10)
+        else:
+            time.sleep(60*60)
+
+
 if __name__ == '__main__':
-    type = 'train'
+    type = 'online_test'
+    print('current type:', type)
     if type == 'train':
-        main(True)
+        main(type)
 
     elif type == 'online_test':
         data_deal()
-        schedule.every().minute.at(':59').do(main, False, 'online')
+        schedule.every().minute.at(':59').do(main, type)
 
         while True:
+            if INIT_FLAG:
+                INIT_FLAG = False
+                schedule.clear()
+                print('wait for 60 minutes for init online std scaler...')
+                init_scaler()
+                schedule.every().minute.at(':59').do(main, type)
+
             if WAIT_FLAG:
                 WAIT_FLAG = False
                 schedule.clear()
                 print('wait for 5 minutes...')
                 time.sleep(60*10)
-                schedule.every().minute.at(':59').do(main, False, 'online')
+                schedule.every().minute.at(':59').do(main, type)
 
                 fault_count = 0
                 for i, _ in is_anomaly.items():
@@ -344,8 +449,7 @@ if __name__ == '__main__':
 
     elif type == 'offline_test':
         for i in range(-2, 6):
-            main(False, 'offline', i)
-            print('\n-----------------------------------------------------------\n')
+            main(type, i)
 
     else:
         print('error type')

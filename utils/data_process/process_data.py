@@ -4,8 +4,8 @@ Description:
 Version: 
 Author: WangChengsen
 Date: 2022-04-21 22:40:10
-LastEditors: Please set LastEditors
-LastEditTime: 2022-04-25 17:58:35
+LastEditors: WangXingyu
+LastEditTime: 2022-04-25 21:47:09
 '''
 import os
 from collections import defaultdict
@@ -98,8 +98,9 @@ def get_raw_data(df, type='node', train=True):
                 df.reset_index(drop=True, inplace=True)
 
                 # mean = joblib.load('./model/scaler/mean.pkl')
-                std_scaler= joblib.load('./model/scaler/std_scaler.pkl')
-                mean=std_scaler.mean_
+                std_scaler = joblib.load(
+                    './model/scaler/online_std_scaler.pkl')
+                mean = std_scaler.mean_
 
                 df['value'] = df.apply(
                     lambda x: mean[x.name] if pd.isnull(x['value']) else x['value'], axis=1)
@@ -141,8 +142,9 @@ def get_raw_data(df, type='node', train=True):
                 df.reset_index(drop=True, inplace=True)
 
                 # mean = joblib.load('./model/scaler/mean.pkl')
-                std_scaler= joblib.load('./model/scaler/std_scaler.pkl')
-                mean=std_scaler.mean_
+                std_scaler = joblib.load(
+                    './model/scaler/online_std_scaler.pkl')
+                mean = std_scaler.mean_
 
                 df['mrt'] = df.apply(
                     lambda x: mean[x.name+6*26] if pd.isnull(x['mrt']) else x['mrt'], axis=1)
@@ -186,8 +188,9 @@ def get_raw_data(df, type='node', train=True):
                 df.reset_index(drop=True, inplace=True)
 
                 # mean = joblib.load('./model/scaler/mean.pkl')
-                std_scaler= joblib.load('./model/scaler/std_scaler.pkl')
-                mean=std_scaler.mean_
+                std_scaler = joblib.load(
+                    './model/scaler/online_std_scaler.pkl')
+                mean = std_scaler.mean_
 
                 df['value'] = df.apply(
                     lambda x: mean[x.name+6*26+11] if pd.isnull(x['value']) else x['value'], axis=1)
@@ -204,39 +207,43 @@ def get_raw_data(df, type='node', train=True):
     return df
 
 
-def process_data(df, cmdbs, kpis, mode='mean', train=True, path='./model/scaler/'):
+def process_data(df, cmdbs, kpis, mode='mean', type='online_test', path='./model/scaler/'):
     """
     返回聚合后的数据
     :param df: n * 1207 (1207 = 6*26 + 11 + 40*26)
     :param cmdbs: 用于固定返回df_cmdb的顺序
     :param kpis: 用于固定返回df_kpi的顺序
     :param mode: "mean" or "max"
-    :param train: True or Fasle
+    :param type: "train" or "online_test" or "offline_test"
     :param scaler_path: scaler存放的路径
     :return: df_cmdb n * 57 (57 = 6 + 11 + 40), df_kpi n * 52 (52 = 26 + 26)
     """
     if not os.path.exists(path):
         os.makedirs(path)
 
-    if train:
+    if type == 'train':
         std = np.std(df.iloc[1440:, :].values, axis=0)
         random_nums = []
         for i in range(1207):
-            random_nums.append(np.random.normal(0, 0.01*std[i],size=1440))
+            random_nums.append(np.random.normal(0, 0.01*std[i], size=1440))
         random_nums = np.array(random_nums).T
-        df.iloc[:1440, :] =  df.iloc[:1440, :] + random_nums
+        df.iloc[:1440, :] = df.iloc[:1440, :] + random_nums
         # mean = df.mean().tolist()
         # mean1 = [1 if x == 0 else x for x in mean]
         # joblib.dump(mean, path + 'mean.pkl')
         # df.iloc[:, :] = np.abs((df.values-mean)/mean1)
         std_scaler = StandardScaler()
         df.iloc[:, :] = np.abs(std_scaler.fit_transform(df.values))
-        joblib.dump(std_scaler, path + 'std_scaler.pkl')
-    else:
+        joblib.dump(std_scaler, path + 'offline_std_scaler.pkl')
+        joblib.dump(std, path + 'std.pkl')
+    elif type == 'offline_test':
         # mean = joblib.load(path + 'mean.pkl')
         # mean1 = [1 if x == 0 else x for x in mean]
         # df.iloc[:, :] = np.abs((df.values-mean)/mean1)
-        std_scaler = joblib.load(path + 'std_scaler.pkl')
+        std_scaler = joblib.load(path + 'offline_std_scaler.pkl')
+        df.iloc[:, :] = np.abs(std_scaler.transform(df.values))
+    elif type == 'online_test':
+        std_scaler = joblib.load(path + 'online_std_scaler.pkl')
         df.iloc[:, :] = np.abs(std_scaler.transform(df.values))
 
     cmdb2kpi = defaultdict(list)

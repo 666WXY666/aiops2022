@@ -5,7 +5,7 @@ Version:
 Author: WangXingyu
 Date: 2022-04-23 23:17:59
 LastEditors: WangXingyu
-LastEditTime: 2022-04-24 21:49:41
+LastEditTime: 2022-04-25 22:34:14
 '''
 
 import math
@@ -498,12 +498,12 @@ class PageRCA():
     def rule_res_out(self, res_out, etype):
         res_out = dict(
             sorted(res_out.items(), key=lambda x: x[1], reverse=True))
+        podsLevel = {
+            'frontend': 1,
+            'checkout': 2,
+            'payment': 3
+        }
         if etype != 'node':
-            podsLevel = {
-                'frontend': 1,
-                'checkout': 2,
-                'payment': 3
-            }
             max_s = 0
             for p in self.fPods:
                 pSvc = p.split('-')[0]
@@ -595,8 +595,13 @@ class PageRCA():
             ans_out = self.rule_res_out(out, etype=ftype)
 
             print("fPods: {}".format(self.fPods))
+
             if ftype == 'svc':
-                ans_out = [i for i in ans_out if i >= 'A' and i <= 'z']
+                temp_out = ''
+                for ch in ans_out:
+                    if ch >= 'A' and ch <= 'z':
+                        temp_out += ch
+                ans_out = temp_out
 
             return ans_out
         else:

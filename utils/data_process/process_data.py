@@ -5,7 +5,7 @@ Version:
 Author: WangChengsen
 Date: 2022-04-21 22:40:10
 LastEditors: WangXingyu
-LastEditTime: 2022-04-25 21:47:09
+LastEditTime: 2022-04-26 15:03:46
 '''
 import os
 from collections import defaultdict
@@ -82,14 +82,12 @@ def get_raw_data(df, type='node', train=True):
         features_node.sort()
 
         if not train:
-            available_node_kpi = df.drop_duplicates(
-                ['node_kpi'])['node_kpi'].tolist()
-            available_node_kpi.sort()
-
+            available_node_kpi = df['node_kpi'].tolist()
             addition_features_node = list(
                 set(features_node)-set(available_node_kpi))
 
             if len(addition_features_node) > 0:
+                print('addition_features_node:', addition_features_node)
                 addition_features_node = pd.DataFrame(
                     addition_features_node, columns=['node_kpi'])
                 df = pd.concat(
@@ -126,14 +124,12 @@ def get_raw_data(df, type='node', train=True):
         features_service.sort()
 
         if not train:
-            available_service_kpi = df.drop_duplicates(
-                ['service_kpi'])['service_kpi'].tolist()
-            available_service_kpi.sort()
-
+            available_service_kpi = df['service_kpi'].tolist()
             addition_features_service = list(
                 set(features_service)-set(available_service_kpi))
 
             if len(addition_features_service) > 0:
+                print('addition_features_service:', addition_features_service)
                 addition_features_service = pd.DataFrame(
                     addition_features_service, columns=['service_kpi'])
                 df = pd.concat(
@@ -163,6 +159,7 @@ def get_raw_data(df, type='node', train=True):
         df['pod_kpi'] = df.apply(
             lambda x: x['cmdb_id'] + ':' + x['kpi_name'], axis=1)
         df.drop(['cmdb_id', 'kpi_name'], axis=1, inplace=True)
+        t = df.value_counts(['pod_kpi'])
         df = df.groupby(
             ['timestamp', 'pod_kpi'], as_index=False)['value'].mean()
         df.sort_values(by='pod_kpi', inplace=True)
@@ -172,14 +169,12 @@ def get_raw_data(df, type='node', train=True):
         features_pod.sort()
 
         if not train:
-            available_pod_kpi = df.drop_duplicates(
-                ['pod_kpi'])['pod_kpi'].tolist()
-            available_pod_kpi.sort()
-
+            available_pod_kpi = df['pod_kpi'].tolist()
             addition_features_pod = list(
                 set(features_pod)-set(available_pod_kpi))
 
             if len(addition_features_pod) > 0:
+                print('addition_features_pod:', addition_features_pod)
                 addition_features_pod = pd.DataFrame(
                     addition_features_pod, columns=['pod_kpi'])
                 df = pd.concat(

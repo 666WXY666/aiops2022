@@ -5,7 +5,7 @@ Version:
 Author: WangXingyu
 Date: 2022-04-06 20:50:54
 LastEditors: WangXingyu
-LastEditTime: 2022-04-25 22:29:38
+LastEditTime: 2022-04-26 15:04:36
 '''
 import os
 import time
@@ -85,12 +85,17 @@ def main(type='online_test', run_i=0):
                                  './data/training_data_with_faults/tar/2022-03-20-cloudbed1/metric/node/kpi_cloudbed1_metric_0320.csv'),
                              pd.read_csv('./data/training_data_with_faults/tar/2022-03-21-cloudbed1/metric/node/kpi_cloudbed1_metric_0321.csv')])
         df_node.reset_index(drop=True, inplace=True)
+        df_node = df_node[df_node['kpi_name'].isin(
+            node_kpis)].reset_index(drop=True)
+        df_node['value'] = df_node['value'].astype('float')
+        print('df_node:\n', df_node)
 
         df_service = pd.concat([pd.read_csv('./data/training_data_normal/cloudbed-1/metric/service/metric_service.csv'),
                                 pd.read_csv(
                                     './data/training_data_with_faults/tar/2022-03-20-cloudbed1/metric/service/metric_service.csv'),
                                 pd.read_csv('./data/training_data_with_faults/tar/2022-03-21-cloudbed1/metric/service/metric_service.csv')])
         df_service.reset_index(drop=True, inplace=True)
+        print('df_service:\n', df_service)
 
         dfs_pod = []
         for kpi in pod_kpis:
@@ -105,15 +110,19 @@ def main(type='online_test', run_i=0):
             df_pod3 = pd.read_csv(
                 './data/training_data_with_faults/tar/2022-03-21-cloudbed1/metric/container/kpi_' + kpi.split('.')[0] + '.csv')
             dfs_pod.append(df_pod3)
-
         df_pod = pd.concat(dfs_pod, ignore_index=True)
         df_pod.reset_index(drop=True, inplace=True)
         df_pod['kpi_name'] = df_pod['kpi_name'].apply(
             lambda x: x.split('./')[0])
-
-        print('df_node:\n', df_node)
-        print('df_service:\n', df_service)
+        df_pod = df_pod[df_pod['kpi_name'].isin(
+            pod_kpis)].reset_index(drop=True)
+        df_pod['cmdb_id'] = df_pod['cmdb_id'].apply(
+            lambda x: 'redis-cart' if 'redis-cart' in x else x)
+        df_pod = df_pod[df_pod['cmdb_id'] !=
+                        'redis-cart'].reset_index(drop=True)
+        df_pod['value'] = df_pod['value'].astype('float')
         print('df_pod:\n', df_pod)
+
     # 离线测试和在线测试
     else:
         print('\n-----------------------------------------------------------\n')
@@ -170,7 +179,7 @@ def main(type='online_test', run_i=0):
                 df_service = pd.DataFrame()
         # 离线测试
         else:
-            current_check_time = 1647796830 - 1647796830 % 60
+            current_check_time = 1647788966 - 1647788966 % 60
             current_check_time += run_i*60
             print('current_check_timestamp:', current_check_time)
             print('current_check_time:', time.strftime(
@@ -219,21 +228,29 @@ def main(type='online_test', run_i=0):
             df_kpi['kpi_name'] = df_kpi['kpi_name'].apply(
                 lambda x: x.split('./')[0])
             df_kpi['value'] = df_kpi['value'].astype('float')
+
             df_node = df_kpi[df_kpi['kpi_name'].isin(
                 node_kpis)].reset_index(drop=True)
+            print('df_node:\n', df_node)
+
             df_pod = df_kpi[df_kpi['kpi_name'].isin(
                 pod_kpis)].reset_index(drop=True)
-
-            print('df_node:\n', df_node)
+            df_pod['cmdb_id'] = df_pod['cmdb_id'].apply(
+                lambda x: 'redis-cart' if 'redis-cart' in x else x)
+            df_pod = df_pod[df_pod['cmdb_id'] !=
+                            'redis-cart'].reset_index(drop=True)
             print('df_pod:\n', df_pod)
+
+            df_kpi_10min['value'] = df_kpi_10min['value'].astype('float')
 
             df_rca = df_kpi_10min[df_kpi_10min['kpi_name'].isin(
                 rca_kpis)].reset_index(drop=True)
+            print('df_rca:\n', df_rca)
+
             df_kpi_10min['kpi_name'] = df_kpi_10min['kpi_name'].apply(
                 lambda x: 'istio_request_duration_milliseconds' if 'istio_request_duration_milliseconds' in x else x)
             df_istio = df_kpi_10min[df_kpi_10min['kpi_name'].isin(
                 istio_kpis)].reset_index(drop=True)
-            print('df_rca:\n', df_rca)
             print('df_istio:\n', df_istio)
 
             rca_timestamp = df_rca.drop_duplicates(
@@ -357,7 +374,7 @@ def init_scaler():
             metric_time = next(reversed(metric_d))
             newest_time = min(int(kpi_time), int(metric_time))
 
-            if newest_time % (24*60*60) == 61200:
+            if newest_time % (24*60*60) == 61140:
                 kpi_60min_list = []
                 for i in reversed(range(60)):
                     kpi_60min_list += kpi_d.get(
@@ -378,12 +395,17 @@ def init_scaler():
                 df_kpi_60min['kpi_name'] = df_kpi_60min['kpi_name'].apply(
                     lambda x: x.split('./')[0])
                 df_kpi_60min['value'] = df_kpi_60min['value'].astype('float')
+
                 df_node_60min = df_kpi_60min[df_kpi_60min['kpi_name'].isin(
                     node_kpis)].reset_index(drop=True)
+                print('df_node_60min:\n', df_node_60min)
+
                 df_pod_60min = df_kpi_60min[df_kpi_60min['kpi_name'].isin(
                     pod_kpis)].reset_index(drop=True)
-
-                print('df_node_60min:\n', df_node_60min)
+                df_pod_60min['cmdb_id'] = df_pod_60min['cmdb_id'].apply(
+                    lambda x: 'redis-cart' if 'redis-cart' in x else x)
+                df_pod_60min = df_pod_60min[df_pod_60min['cmdb_id'] !=
+                                            'redis-cart'].reset_index(drop=True)
                 print('df_pod_60min:\n', df_pod_60min)
 
                 df_node_60min = get_raw_data(
@@ -413,6 +435,7 @@ def init_scaler():
             else:
                 time.sleep(10)
         else:
+            print('wait for 60 minutes for init online std scaler...')
             time.sleep(60*60)
 
 
@@ -430,14 +453,16 @@ if __name__ == '__main__':
             if INIT_FLAG:
                 INIT_FLAG = False
                 schedule.clear()
-                print('wait for 60 minutes for init online std scaler...')
+                print('wait for 50 minutes for init online std scaler...')
+                time.sleep(60*50)
+                print('init online std scaler...')
                 init_scaler()
                 schedule.every().minute.at(':59').do(main, type)
 
             if WAIT_FLAG:
                 WAIT_FLAG = False
                 schedule.clear()
-                print('wait for 5 minutes...')
+                print('wait for 10 minutes...')
                 time.sleep(60*10)
                 schedule.every().minute.at(':59').do(main, type)
 

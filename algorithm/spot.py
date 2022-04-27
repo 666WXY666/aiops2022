@@ -5,7 +5,7 @@ Version:
 Author: WangXingyu
 Date: 2022-04-23 18:49:49
 LastEditors: WangXingyu
-LastEditTime: 2022-04-27 19:34:46
+LastEditTime: 2022-04-27 22:10:18
 '''
 from math import floor, log
 
@@ -468,10 +468,10 @@ class SPOT:
         for id in cmdb:
             # try:
             data = norm_data[id].values
-            # if id == 'cartservice-grpc':
-            #     n_init = 1000
-            # else:
-            n_init = 1440
+            if id == 'cartservice-grpc':
+                n_init = 800
+            else:
+                n_init = 1440
             # n_init = int(len(data)*3/4)
             init_data = data[1:n_init]
             _data = data[n_init:]
@@ -479,7 +479,7 @@ class SPOT:
             self.initialize()
             results = self.run()
             res_thre = results['thresholds']
-            threshold_list[id] = res_thre[-1]*1.5
+            threshold_list[id] = res_thre[-1]
             # except:
             #     print(id)
 

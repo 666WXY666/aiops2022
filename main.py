@@ -5,7 +5,7 @@ Version:
 Author: WangXingyu
 Date: 2022-04-06 20:50:54
 LastEditors: WangXingyu
-LastEditTime: 2022-04-27 19:42:44
+LastEditTime: 2022-04-27 22:17:13
 '''
 import os
 import time
@@ -187,7 +187,7 @@ def main(type='online_test', run_i=0):
                 df_service = pd.DataFrame()
         # 离线测试
         else:
-            current_check_time = 1647836000 - 1647836000 % 60
+            current_check_time = 1647838805 - 1647838805 % 60
             current_check_time += run_i*60
             print('current_check_timestamp:', current_check_time)
             print('current_check_time:', time.strftime(
@@ -325,8 +325,7 @@ def main(type='online_test', run_i=0):
             df_before = df
         else:
             df_temp = df.copy()
-            df = pd.concat([df_before, df],
-                           ignore_index=True).diff().iloc[-1:, :]
+            df = pd.concat([df_before, df]).diff().iloc[-1:, :]
             df_before = df_temp
 
             cmdb = nodes + services + pods
@@ -353,13 +352,16 @@ def main(type='online_test', run_i=0):
             print(anomaly_dict)
             # 有异常
             if fault_flag:
-                global fault_count
-                fault_count += 1
                 global fault_num
                 fault_num += 1
                 global fault_timestamp
                 if fault_num == 1:
                     fault_timestamp = current_check_time
+                global fault_count
+                if current_check_time-fault_timestamp > 60*5:
+                    fault_count = 1
+                else:
+                    fault_count += 1
                 if fault_count >= 2 and current_check_time-fault_timestamp <= 60*5:
                     fault_count = 0
                     # anomaly_count = len(
@@ -471,7 +473,7 @@ def init_scaler():
 
 
 if __name__ == '__main__':
-    type = 'offline_test'
+    type = 'online_test'
     print('current type:', type)
     if type == 'train':
         main(type)
@@ -500,7 +502,7 @@ if __name__ == '__main__':
             schedule.run_pending()
 
     elif type == 'offline_test':
-        for i in range(-3, 4):
+        for i in range(-3, 8):
             main(type, i)
 
     else:

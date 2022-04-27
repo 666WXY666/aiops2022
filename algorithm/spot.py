@@ -4,8 +4,8 @@ Description:
 Version: 
 Author: WangXingyu
 Date: 2022-04-23 18:49:49
-LastEditors: Please set LastEditors
-LastEditTime: 2022-04-25 17:43:05
+LastEditors: WangXingyu
+LastEditTime: 2022-04-27 19:34:46
 '''
 from math import floor, log
 
@@ -468,18 +468,18 @@ class SPOT:
         for id in cmdb:
             # try:
             data = norm_data[id].values
-            if id == 'cartservice-grpc':
-                data = data[100:400]
-                n_init = int(len(data)*3/4)
-            else:
-                n_init = 1440
-            init_data = data[:n_init]
+            # if id == 'cartservice-grpc':
+            #     n_init = 1000
+            # else:
+            n_init = 1440
+            # n_init = int(len(data)*3/4)
+            init_data = data[1:n_init]
             _data = data[n_init:]
             self.fit(init_data, _data)
             self.initialize()
             results = self.run()
             res_thre = results['thresholds']
-            threshold_list[id] = res_thre[-1]
+            threshold_list[id] = res_thre[-1]*1.5
             # except:
             #     print(id)
 
@@ -519,7 +519,7 @@ class SPOT:
         anomaly_dict = {'service': [], 'pod': [], 'node': []}
         fault_flag = False  # 判定是否异常条件: 连续两个点异常
         for key, value in abn_dict.items():
-            if value == 1:
+            if value >= 2:
                 words = key.split('-')
                 if words[0] == 'node':
                     anomaly_dict['node'].append(key)

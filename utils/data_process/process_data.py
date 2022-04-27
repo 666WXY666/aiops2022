@@ -5,7 +5,7 @@ Version:
 Author: WangChengsen
 Date: 2022-04-21 22:40:10
 LastEditors: WangXingyu
-LastEditTime: 2022-04-26 15:03:46
+LastEditTime: 2022-04-27 18:18:23
 '''
 import os
 from collections import defaultdict
@@ -159,7 +159,6 @@ def get_raw_data(df, type='node', train=True):
         df['pod_kpi'] = df.apply(
             lambda x: x['cmdb_id'] + ':' + x['kpi_name'], axis=1)
         df.drop(['cmdb_id', 'kpi_name'], axis=1, inplace=True)
-        t = df.value_counts(['pod_kpi'])
         df = df.groupby(
             ['timestamp', 'pod_kpi'], as_index=False)['value'].mean()
         df.sort_values(by='pod_kpi', inplace=True)
@@ -202,6 +201,28 @@ def get_raw_data(df, type='node', train=True):
     return df
 
 
+def noise_clean(df, std):
+    df = df.copy()
+
+    # 过滤异常值
+    sigma_n = 3
+    df_mean = np.mean(df.values, axis=0)
+    df_std = np.std(df.values, axis=0)
+    threshold1 = df_mean - sigma_n * df_std
+    threshold2 = df_mean + sigma_n * df_std
+    for i in range(1207):
+        df.iloc[:, i] = df.iloc[:, i].apply(
+            lambda x: df_mean[i] if x < threshold1[i] or x > threshold2[i] else x)
+
+    random_nums = []
+    for i in range(1207):
+        random_nums.append(np.random.normal(0, 0.01*std[i], size=60))
+    random_nums = np.array(random_nums).T
+    df = df + random_nums
+
+    return df
+
+
 def process_data(df, cmdbs, kpis, mode='mean', type='online_test', path='./model/scaler/'):
     """
     返回聚合后的数据
@@ -217,25 +238,32 @@ def process_data(df, cmdbs, kpis, mode='mean', type='online_test', path='./model
         os.makedirs(path)
 
     if type == 'train':
+        # 做差分
+        df = df.diff()
+
         std = np.std(df.iloc[1440:, :].values, axis=0)
-        random_nums = []
-        for i in range(1207):
-            random_nums.append(np.random.normal(0, 0.01*std[i], size=1440))
-        random_nums = np.array(random_nums).T
-        df.iloc[:1440, :] = df.iloc[:1440, :] + random_nums
-        # mean = df.mean().tolist()
-        # mean1 = [1 if x == 0 else x for x in mean]
-        # joblib.dump(mean, path + 'mean.pkl')
-        # df.iloc[:, :] = np.abs((df.values-mean)/mean1)
-        std_scaler = StandardScaler()
-        df.iloc[:, :] = np.abs(std_scaler.fit_transform(df.values))
-        joblib.dump(std_scaler, path + 'offline_std_scaler.pkl')
         joblib.dump(std, path + 'std.pkl')
+
+        std_scaler1 = StandardScaler()
+        std_scaler1.fit(noise_clean(df.iloc[:60, :], std).values)
+        df.iloc[:1440, :] = np.abs(
+            std_scaler1.transform(df.iloc[:1440, :].values))
+        joblib.dump(std_scaler1, path + 'offline_std_scaler1.pkl')
+
+        std_scaler2 = StandardScaler()
+        std_scaler2.fit(noise_clean(df.iloc[1440:1440+60, :], std).values)
+        df.iloc[1440:2880, :] = np.abs(
+            std_scaler2.transform(df.iloc[1440:2880, :].values))
+        joblib.dump(std_scaler2, path + 'offline_std_scaler2.pkl')
+
+        std_scaler3 = StandardScaler()
+        std_scaler3.fit(noise_clean(df.iloc[2880:2880+60, :], std).values)
+        df.iloc[2880:, :] = np.abs(
+            std_scaler3.transform(df.iloc[2880:, :].values))
+        joblib.dump(std_scaler3, path + 'offline_std_scaler3.pkl')
+
     elif type == 'offline_test':
-        # mean = joblib.load(path + 'mean.pkl')
-        # mean1 = [1 if x == 0 else x for x in mean]
-        # df.iloc[:, :] = np.abs((df.values-mean)/mean1)
-        std_scaler = joblib.load(path + 'offline_std_scaler.pkl')
+        std_scaler = joblib.load(path + 'offline_std_scaler3.pkl')
         df.iloc[:, :] = np.abs(std_scaler.transform(df.values))
     elif type == 'online_test':
         std_scaler = joblib.load(path + 'online_std_scaler.pkl')

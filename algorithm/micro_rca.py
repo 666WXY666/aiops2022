@@ -5,7 +5,7 @@ Version:
 Author: WangXingyu
 Date: 2022-04-23 23:17:59
 LastEditors: WangXingyu
-LastEditTime: 2022-04-25 22:34:14
+LastEditTime: 2022-04-27 19:24:23
 '''
 
 import math
@@ -432,6 +432,11 @@ class PageRCA():
             node = cmdb.split('.')[0]
             pod = cmdb.split('.')[-1]
             svc = pod.split('-')[0]
+            temp_svc = ''
+            for ch in svc:
+                if ch >= 'A' and ch <= 'z':
+                    temp_svc += ch
+            svc = temp_svc
             res = {
                 'node': node,
                 'svc': svc,
@@ -452,7 +457,7 @@ class PageRCA():
             if res not in res_out.keys():
                 res_out[res] = score
             else:
-                res_out[res] += score
+                res_out[res] = max(score, res_out[res])
 
         return res_out
 

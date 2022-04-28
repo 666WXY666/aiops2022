@@ -5,13 +5,13 @@ Version:
 Author: WangXingyu
 Date: 2022-04-06 20:50:54
 LastEditors: WangXingyu
-LastEditTime: 2022-04-27 22:17:13
+LastEditTime: 2022-04-28 22:44:39
 '''
 import os
+import random
 import time
+import traceback
 from collections import defaultdict
-from re import A
-from sys import stderr
 
 import joblib
 import numpy as np
@@ -29,6 +29,9 @@ from utils.data_process.process_data import (get_raw_data, istio_kpis,
                                              rca_kpis, service_kpis, services,
                                              upsample)
 from utils.submit.submit import submit
+
+random.seed(42)
+np.random.seed(42)
 
 is_anomaly = {i: 0 for i in nodes+pods+services}
 
@@ -156,12 +159,8 @@ def main(type='online_test', run_i=0):
                         '%H:%M:%S', time.localtime(current_check_time)))
 
                     kpi_list = kpi_d.get(current_check_time, [])
-                    try:
-                        df_kpi = pd.DataFrame(
-                            kpi_list, columns=['timestamp', 'cmdb_id', 'kpi_name', 'value'])
-                    except Exception:
-                        print('error!!!!!!!!!!!!  ./data/kpi_list.pkl')
-                        joblib.dump(kpi_list, './data/kpi_list.pkl')
+                    df_kpi = pd.DataFrame(
+                        kpi_list, columns=['timestamp', 'cmdb_id', 'kpi_name', 'value'])
                     print('df_kpi:\n', df_kpi)
 
                     kpi_10min_list = []
@@ -187,7 +186,7 @@ def main(type='online_test', run_i=0):
                 df_service = pd.DataFrame()
         # 离线测试
         else:
-            current_check_time = 1647838805 - 1647838805 % 60
+            current_check_time = 1647845943 - 1647845943 % 60
             current_check_time += run_i*60
             print('current_check_timestamp:', current_check_time)
             print('current_check_time:', time.strftime(
@@ -278,11 +277,13 @@ def main(type='online_test', run_i=0):
         df_pod = get_raw_data(df_pod, type='pod', train=True)
 
         df = pd.concat([df_node, df_service, df_pod], axis=1)
-        print('df:\n', df)
+        print('df_before_diff:\n', df)
 
-        cmdb = nodes + services + pods
-        node_pod_kpis = node_kpis+pod_kpis
-        df_anomaly, df_cat = process_data(df, cmdb, node_pod_kpis, type=type)
+        # 做差分
+        df = df.diff()
+        print('df_after_diff:\n', df)
+
+        df_anomaly, df_cat = process_data(df, type=type)
         print('df_anomaly:\n', df_anomaly)
         print('df_cat:\n', df_cat)
 
@@ -318,7 +319,7 @@ def main(type='online_test', run_i=0):
         df_pod = get_raw_data(df_pod, type='pod', train=False)
 
         df = pd.concat([df_node, df_service, df_pod], axis=1)
-        print('df:\n', df)
+        print('df_before_diff:\n', df)
 
         global df_before
         if df_before is None:
@@ -326,12 +327,11 @@ def main(type='online_test', run_i=0):
         else:
             df_temp = df.copy()
             df = pd.concat([df_before, df]).diff().iloc[-1:, :]
+            print('df_after_diff:\n', df)
             df_before = df_temp
 
-            cmdb = nodes + services + pods
-            node_pod_kpis = node_kpis+pod_kpis
             df_anomaly, df_cat = process_data(
-                df, cmdb, node_pod_kpis, type=type)
+                df, type=type)
             print('df_anomaly:\n', df_anomaly)
             print('df_cat:\n', df_cat)
 
@@ -340,11 +340,12 @@ def main(type='online_test', run_i=0):
 
             res = spot.detect(df_anomaly)
 
+            cmdbs = nodes + services + pods
             for idx, abn in enumerate(res):
                 if abn == True:
-                    is_anomaly[cmdb[idx]] += 1
+                    is_anomaly[cmdbs[idx]] += 1
                 else:
-                    is_anomaly[cmdb[idx]] = 0
+                    is_anomaly[cmdbs[idx]] = 0
 
             fault_flag, anomaly_dict = spot.check_anomaly(is_anomaly)
 
@@ -411,16 +412,16 @@ def init_scaler():
             newest_time = min(int(kpi_time), int(metric_time))
 
             if newest_time % (24*60*60) >= 61140:
+                print('current_init_timestamp:', newest_time)
+                print('current_init_time:', time.strftime(
+                    '%H:%M:%S', time.localtime(newest_time)))
+
                 kpi_60min_list = []
                 for i in reversed(range(60)):
                     kpi_60min_list += kpi_d.get(
                         newest_time - i*60, [])
-                try:
-                    df_kpi_60min = pd.DataFrame(
-                        kpi_60min_list, columns=['timestamp', 'cmdb_id', 'kpi_name', 'value'])
-                except Exception:
-                    print('error!!!!!!!!!!!!  ./data/kpi_60min_list.pkl')
-                    joblib.dump(kpi_60min_list, './data/kpi_60min_list.pkl')
+                df_kpi_60min = pd.DataFrame(kpi_60min_list, columns=[
+                                            'timestamp', 'cmdb_id', 'kpi_name', 'value'])
                 print('df_kpi_60min:\n', df_kpi_60min)
 
                 metric_60min_list = []
@@ -457,7 +458,13 @@ def init_scaler():
 
                 df_60min = pd.concat(
                     [df_node_60min, df_service_60min, df_pod_60min], axis=1)
-                print('df_60min:\n', df_60min)
+                print('df_60min_before_diff:\n', df_60min)
+
+                # 做差分
+                df_60min = df_60min.diff()
+                print('df_60min_after_diff:\n', df_60min)
+
+                df_60min = df_60min.fillna(0)
 
                 std = joblib.load('./model/scaler/std.pkl')
                 online_std_scaler = StandardScaler()
@@ -468,12 +475,12 @@ def init_scaler():
             else:
                 time.sleep(10)
         else:
-            print('wait for 50 minutes for init online std scaler...')
-            time.sleep(60*50)
+            print('wait for 30 minutes for init online std scaler...')
+            time.sleep(60*30)
 
 
 if __name__ == '__main__':
-    type = 'online_test'
+    type = 'offline_test'
     print('current type:', type)
     if type == 'train':
         main(type)
@@ -481,25 +488,43 @@ if __name__ == '__main__':
     elif type == 'online_test':
         data_deal()
         schedule.every().minute.at(':59').do(main, type)
-
         while True:
-            if INIT_FLAG:
-                INIT_FLAG = False
-                schedule.clear()
-                print('wait for 30 minutes for init online std scaler...')
-                time.sleep(60*30)
-                print('init online std scaler...')
-                init_scaler()
-                schedule.every().minute.at(':59').do(main, type)
+            try:
+                if INIT_FLAG:
+                    INIT_FLAG = False
+                    schedule.clear()
+                    print('init online std scaler...')
+                    init_scaler()
+                    schedule.every().minute.at(':59').do(main, type)
 
-            if WAIT_FLAG:
+                if WAIT_FLAG:
+                    WAIT_FLAG = False
+                    schedule.clear()
+                    print('wait for 10 minutes...')
+                    time.sleep(60*10)
+                    schedule.every().minute.at(':59').do(main, type)
+
+                schedule.run_pending()
+
+            except Exception as e:
+                print('!!!ERROR!!!')
+                schedule.clear()
+                print('error clear all jobs...')
+                print(e)
+                print(traceback.format_exc())
+                # 恢复初始状态
+                print('restore to initial state...')
+                is_anomaly = {i: 0 for i in nodes+pods+services}
                 WAIT_FLAG = False
-                schedule.clear()
-                print('wait for 10 minutes...')
-                time.sleep(60*10)
+                INIT_FLAG = False
+                fault_count = 0
+                fault_timestamp = 0
+                fault_num = 0
+                current_check_time = -1
+                df_before = None
+                print('wait for 60s to recover...')
+                time.sleep(60)
                 schedule.every().minute.at(':59').do(main, type)
-
-            schedule.run_pending()
 
     elif type == 'offline_test':
         for i in range(-3, 8):

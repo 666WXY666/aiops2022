@@ -5,7 +5,7 @@ Version:
 Author: WangChengsen
 Date: 2022-04-21 22:40:10
 LastEditors: WangXingyu
-LastEditTime: 2022-04-27 18:18:23
+LastEditTime: 2022-04-28 20:54:45
 '''
 import os
 from collections import defaultdict
@@ -74,7 +74,6 @@ def get_raw_data(df, type='node', train=True):
         df.drop(['cmdb_id', 'kpi_name'], axis=1, inplace=True)
         df = df.groupby(
             ['timestamp', 'node_kpi'], as_index=False)['value'].mean()
-        df.sort_values(by='node_kpi', inplace=True)
         df.reset_index(drop=True, inplace=True)
 
         features_node = [
@@ -88,35 +87,21 @@ def get_raw_data(df, type='node', train=True):
 
             if len(addition_features_node) > 0:
                 print('addition_features_node:', addition_features_node)
-                addition_features_node = pd.DataFrame(
-                    addition_features_node, columns=['node_kpi'])
+                addition_features_node = pd.DataFrame({'timestamp': [timestamp] * len(addition_features_node), 'node_kpi':
+                                                       addition_features_node})
                 df = pd.concat(
                     [df, addition_features_node], ignore_index=True)
-                df.sort_values(by='node_kpi', inplace=True)
                 df.reset_index(drop=True, inplace=True)
-
-                # mean = joblib.load('./model/scaler/mean.pkl')
-                std_scaler = joblib.load(
-                    './model/scaler/online_std_scaler.pkl')
-                mean = std_scaler.mean_
-
-                df['value'] = df.apply(
-                    lambda x: mean[x.name] if pd.isnull(x['value']) else x['value'], axis=1)
-                df['timestamp'] = df.apply(
-                    lambda x: timestamp if pd.isnull(x['timestamp']) else int(x['timestamp']), axis=1)
 
         df = pd.pivot(df, index='timestamp', columns='node_kpi')
         df.columns = [col[1] for col in df.columns]
         df = df[features_node].sort_index()
-        if train:
-            df = fillna_with_mean(df)
 
     elif type == 'service':
         df['service_kpi'] = df['service'].apply(lambda x: x + ':mrt')
         df.drop(['rr', 'sr', 'count'], axis=1, inplace=True)
         df = df.groupby(
             ['timestamp', 'service_kpi'], as_index=False)['mrt'].mean()
-        df.sort_values(by='service_kpi', inplace=True)
         df.reset_index(drop=True, inplace=True)
 
         features_service = [service + ':' +
@@ -134,24 +119,11 @@ def get_raw_data(df, type='node', train=True):
                     addition_features_service, columns=['service_kpi'])
                 df = pd.concat(
                     [df, addition_features_service], ignore_index=True)
-                df.sort_values(by='service_kpi', inplace=True)
                 df.reset_index(drop=True, inplace=True)
-
-                # mean = joblib.load('./model/scaler/mean.pkl')
-                std_scaler = joblib.load(
-                    './model/scaler/online_std_scaler.pkl')
-                mean = std_scaler.mean_
-
-                df['mrt'] = df.apply(
-                    lambda x: mean[x.name+6*26] if pd.isnull(x['mrt']) else x['mrt'], axis=1)
-                df['timestamp'] = df.apply(
-                    lambda x: timestamp if pd.isnull(x['timestamp']) else int(x['timestamp']), axis=1)
 
         df = pd.pivot(df, index='timestamp', columns='service_kpi')
         df.columns = [col[1] for col in df.columns]
         df = df[features_service].sort_index()
-        if train:
-            df = fillna_with_mean(df)
 
     elif type == 'pod':
         df['cmdb_id'] = df['cmdb_id'].apply(
@@ -161,7 +133,6 @@ def get_raw_data(df, type='node', train=True):
         df.drop(['cmdb_id', 'kpi_name'], axis=1, inplace=True)
         df = df.groupby(
             ['timestamp', 'pod_kpi'], as_index=False)['value'].mean()
-        df.sort_values(by='pod_kpi', inplace=True)
         df.reset_index(drop=True, inplace=True)
 
         features_pod = [pod + ':' + kpi for kpi in pod_kpis for pod in pods]
@@ -178,24 +149,11 @@ def get_raw_data(df, type='node', train=True):
                     addition_features_pod, columns=['pod_kpi'])
                 df = pd.concat(
                     [df, addition_features_pod], ignore_index=True)
-                df.sort_values(by='pod_kpi', inplace=True)
                 df.reset_index(drop=True, inplace=True)
-
-                # mean = joblib.load('./model/scaler/mean.pkl')
-                std_scaler = joblib.load(
-                    './model/scaler/online_std_scaler.pkl')
-                mean = std_scaler.mean_
-
-                df['value'] = df.apply(
-                    lambda x: mean[x.name+6*26+11] if pd.isnull(x['value']) else x['value'], axis=1)
-                df['timestamp'] = df.apply(
-                    lambda x: timestamp if pd.isnull(x['timestamp']) else int(x['timestamp']), axis=1)
 
         df = pd.pivot(df, index='timestamp', columns='pod_kpi')
         df.columns = [col[1] for col in df.columns]
         df = df[features_pod].sort_index()
-        if train:
-            df = fillna_with_mean(df)
     else:
         print('type must be "node" or "service" or "pod".')
     return df
@@ -223,7 +181,7 @@ def noise_clean(df, std):
     return df
 
 
-def process_data(df, cmdbs, kpis, mode='mean', type='online_test', path='./model/scaler/'):
+def process_data(df, type='online_test', path='./model/scaler/'):
     """
     返回聚合后的数据
     :param df: n * 1207 (1207 = 6*26 + 11 + 40*26)
@@ -234,13 +192,14 @@ def process_data(df, cmdbs, kpis, mode='mean', type='online_test', path='./model
     :param scaler_path: scaler存放的路径
     :return: df_cmdb n * 57 (57 = 6 + 11 + 40), df_kpi n * 52 (52 = 26 + 26)
     """
+    cmdbs = nodes + services + pods
+    node_pod_kpis = node_kpis+pod_kpis
     if not os.path.exists(path):
         os.makedirs(path)
 
-    if type == 'train':
-        # 做差分
-        df = df.diff()
+    df = df.fillna(0)
 
+    if type == 'train':
         std = np.std(df.iloc[1440:, :].values, axis=0)
         joblib.dump(std, path + 'std.pkl')
 
@@ -262,6 +221,8 @@ def process_data(df, cmdbs, kpis, mode='mean', type='online_test', path='./model
             std_scaler3.transform(df.iloc[2880:, :].values))
         joblib.dump(std_scaler3, path + 'offline_std_scaler3.pkl')
 
+        df.to_csv('./data/df_1207_after.csv')
+
     elif type == 'offline_test':
         std_scaler = joblib.load(path + 'offline_std_scaler3.pkl')
         df.iloc[:, :] = np.abs(std_scaler.transform(df.values))
@@ -277,19 +238,16 @@ def process_data(df, cmdbs, kpis, mode='mean', type='online_test', path='./model
 
     df_cmdb = pd.DataFrame()
     df_kpi = pd.DataFrame()
-    if mode == 'mean':
-        for cmdb, kpi in cmdb2kpi.items():
-            df_cmdb[cmdb] = df[kpi].apply(lambda x: x.mean(), axis=1)
-        for kpi, cmdb in kpi2cmdb.items():
-            df_kpi[kpi] = df[cmdb].apply(lambda x: x.mean(), axis=1)
-    elif mode == 'max':
-        for cmdb, kpi in cmdb2kpi.items():
-            df_cmdb[cmdb] = df[kpi].apply(lambda x: x.max(), axis=1)
-        for kpi, cmdb in kpi2cmdb.items():
-            df_kpi[kpi] = df[cmdb].apply(lambda x: x.max(), axis=1)
-    else:
-        print('mode must be "mean" or "max".')
+
+    for cmdb, kpi in cmdb2kpi.items():
+        df_cmdb[cmdb] = df[kpi].apply(lambda x: x.mean(), axis=1)
+    for kpi, cmdb in kpi2cmdb.items():
+        df_kpi[kpi] = df[cmdb].apply(lambda x: x.mean(), axis=1)
 
     df_cmdb = df_cmdb[cmdbs]
-    df_kpi = df_kpi[kpis]
+    if type == 'train':
+        df_cmdb.to_csv('./data/df_57.csv')
+
+    df_kpi = df_kpi[node_pod_kpis]
+
     return df_cmdb, df_kpi

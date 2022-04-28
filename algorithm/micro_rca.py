@@ -1,12 +1,15 @@
 '''
 Copyright: Copyright (c) 2021 WangXingyu All Rights Reserved.
-Description:
-Version:
+Description: 
+Version: 
 Author: WangXingyu
-Date: 2022-04-23 23:17:59
+Date: 2022-04-28 13:00:54
 LastEditors: WangXingyu
-LastEditTime: 2022-04-27 19:24:23
+LastEditTime: 2022-04-28 22:18:05
 '''
+
+# GMPG = np.load('pods_mpg.npy', allow_pickle=True)
+
 
 import math
 import os
@@ -25,7 +28,6 @@ from torch import fix_
 from tqdm import tqdm
 
 
-# GMPG = np.load('pods_mpg.npy', allow_pickle=True)
 class PageRCA():
     def __init__(self, ts, fDict, responds, metric):
         assert ts < 10**10
@@ -155,8 +157,8 @@ class PageRCA():
         else:
             if len(pod) != 0:
                 return pod
-            elif len(service) != 0:
-                return service
+            # elif len(service) != 0:
+            #     return service
             else:
                 return nodes_pd['pod'].tolist()
 
@@ -429,6 +431,8 @@ class PageRCA():
         cmdbL = metric['cmdb_id'].value_counts().index
         res_pd = pd.DataFrame(data=None, columns=['node', 'svc', 'pod'])
         for cmdb in cmdbL:
+            if 'redis-cart' in cmdb:
+                continue
             node = cmdb.split('.')[0]
             pod = cmdb.split('.')[-1]
             svc = pod.split('-')[0]
@@ -461,54 +465,15 @@ class PageRCA():
 
         return res_out
 
-    #     res_out = dict(
-    #         sorted(res_out.items(), key=lambda x: x[1], reverse=True))
-
-    #     if etype != 'node':
-    #         FRONTEND = False
-    #         CHECKOUT = False
-    #         PAYMENT = False
-    #         for p in self.fPods:
-    #             if 'frontend' in p:
-    #                 FRONTEND = True
-    #             if 'checkout' in p:
-    #                 CHECKOUT = True
-    #             if 'payment' in p:
-    #                 PAYMENT = True
-
-    #         out0 = list(res_out.keys())
-    #         if FRONTEND:
-    #             out1 = [i for i in out0 if 'frontend' not in i]
-    #             if len(out1) == 0:
-    #                 return out0[0]
-    #             else:
-    #                 if CHECKOUT:
-    #                     out2 = [i for i in out1 if 'checkout' not in i]
-    #                     if len(out2) == 0:
-    #                         return out1[0]
-    #                     else:
-    #                         if PAYMENT:
-    #                             out3 = [i for i in out2 if 'payment' not in i]
-    #                             if len(out3) == 0:
-    #                                 return out2[0]
-    #                             else:
-    #                                 return out3[0]
-    #                         else:
-    #                             return out2[0]
-    #                 else:
-    #                     return out1[0]
-    #         else:
-    #             return out0[0]
-
     def rule_res_out(self, res_out, etype):
         res_out = dict(
             sorted(res_out.items(), key=lambda x: x[1], reverse=True))
-        podsLevel = {
-            'frontend': 1,
-            'checkout': 2,
-            'payment': 3
-        }
         if etype != 'node':
+            podsLevel = {
+                'frontend': 1,
+                'checkout': 2,
+                'payment': 3
+            }
             max_s = 0
             for p in self.fPods:
                 pSvc = p.split('-')[0]
@@ -538,7 +503,7 @@ class PageRCA():
                         return r
             return list(res_out.keys())[0]
         else:
-            return list(podsLevel.keys())[0]
+            return list(res_out.keys())[0]
 
     def roulette_out(self, res):
         nameL = list(res.keys())
@@ -578,16 +543,55 @@ class PageRCA():
 
         return etype
 
+    def adjust_type(self, etype):
+        aScore = self.anomaly_score
+        fPods = self.fPods
+        pod_pd = self.pod_pd
+
+        if etype == 'node':
+            return etype
+
+        maxIdx = 0
+        for p in fPods:
+            for idx, (pn, _) in enumerate(aScore):
+                if pn == p and maxIdx < idx:
+                    maxIdx = idx
+
+        filpPodsL = [p for idx, (p, _) in enumerate(aScore) if idx <= maxIdx]
+        etype = self._judge_svc(filpPodsL, etype)
+
+        return etype
+
+    def _judge_svc(self, PodL, etype):
+        pod_pd = self.pod_pd
+        svcList = pod_pd['svc'].value_counts().index.tolist()
+        svc_pods_numL = pod_pd['svc'].value_counts().values.tolist()
+        for svc, num in zip(svcList, svc_pods_numL):
+            p_num = 0
+            for p in PodL:
+                p_svc = p.split('-')[0]
+                temp_p_svc = ''
+                for ch in p_svc:
+                    if ch >= 'A' and ch <= 'z':
+                        temp_p_svc += ch
+                p_svc = temp_p_svc
+
+                if p_svc == svc:
+                    p_num += 1
+                    if p_num == num:
+                        return 'svc'
+        return etype
+
     def do_rca(self, pos_pd=None):
         fDict = self.fDict
-        if len(fDict['node']) != 0:
+        if len(fDict['node']) != 0 and len(fDict['service']) == 0:
             ftype = 'node'
-        elif len(fDict['service']) != 0:
-            ftype = 'svc'
+        # elif len(fDict['service']) != 0:
+        #     ftype = 'svc'
         else:
             ftype = 'pod'
         if not self.BREAK_L:
-            ftype = self.svc_add_rule(etype=ftype)
+            # ftype = self.svc_add_rule(etype=ftype)
 
             print('Start RCA:\nTime:{}\nfPods:{}'.format(self.ts, self.fPods))
             mpg = self.get_full_mpg()
@@ -596,10 +600,10 @@ class PageRCA():
             self.anomaly_score = self.get_pods_s()
             print("Anomaly_score:{}".format(self.anomaly_score))
 
+            ftype = self.adjust_type(ftype)
+
             out = self.res_out(etype=ftype)
             ans_out = self.rule_res_out(out, etype=ftype)
-
-            print("fPods: {}".format(self.fPods))
 
             if ftype == 'svc':
                 temp_out = ''
@@ -610,7 +614,7 @@ class PageRCA():
 
             return ans_out
         else:
-            return self.node
+            return np.random.choice(self.node)
 
 
 class ScanMpg():

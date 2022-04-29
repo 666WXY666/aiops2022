@@ -5,7 +5,7 @@ Version:
 Author: WangChengsen
 Date: 2022-04-21 22:40:10
 LastEditors: WangXingyu
-LastEditTime: 2022-04-28 20:54:45
+LastEditTime: 2022-04-29 12:04:29
 '''
 import os
 from collections import defaultdict
@@ -93,6 +93,9 @@ def get_raw_data(df, type='node', train=True):
                     [df, addition_features_node], ignore_index=True)
                 df.reset_index(drop=True, inplace=True)
 
+        # df['timestamp'] = df['timestamp'].ffill().bfill()
+        df['timestamp'] = df['timestamp'].astype('int')
+
         df = pd.pivot(df, index='timestamp', columns='node_kpi')
         df.columns = [col[1] for col in df.columns]
         df = df[features_node].sort_index()
@@ -115,11 +118,14 @@ def get_raw_data(df, type='node', train=True):
 
             if len(addition_features_service) > 0:
                 print('addition_features_service:', addition_features_service)
-                addition_features_service = pd.DataFrame(
-                    addition_features_service, columns=['service_kpi'])
+                addition_features_service = pd.DataFrame({'timestamp': [timestamp] * len(addition_features_service), 'service_kpi':
+                                                          addition_features_service})
                 df = pd.concat(
                     [df, addition_features_service], ignore_index=True)
                 df.reset_index(drop=True, inplace=True)
+
+        # df['timestamp'] = df['timestamp'].ffill().bfill()
+        df['timestamp'] = df['timestamp'].astype('int')
 
         df = pd.pivot(df, index='timestamp', columns='service_kpi')
         df.columns = [col[1] for col in df.columns]
@@ -145,11 +151,14 @@ def get_raw_data(df, type='node', train=True):
 
             if len(addition_features_pod) > 0:
                 print('addition_features_pod:', addition_features_pod)
-                addition_features_pod = pd.DataFrame(
-                    addition_features_pod, columns=['pod_kpi'])
+                addition_features_pod = pd.DataFrame({'timestamp': [timestamp] * len(addition_features_pod), 'pod_kpi':
+                                                      addition_features_pod})
                 df = pd.concat(
                     [df, addition_features_pod], ignore_index=True)
                 df.reset_index(drop=True, inplace=True)
+
+        # df['timestamp'] = df['timestamp'].ffill().bfill()
+        df['timestamp'] = df['timestamp'].astype('int')
 
         df = pd.pivot(df, index='timestamp', columns='pod_kpi')
         df.columns = [col[1] for col in df.columns]

@@ -5,7 +5,7 @@ Version:
 Author: WangXingyu
 Date: 2022-04-06 20:50:54
 LastEditors: WangXingyu
-LastEditTime: 2022-04-28 22:44:39
+LastEditTime: 2022-04-29 11:26:04
 '''
 import os
 import random
@@ -322,6 +322,7 @@ def main(type='online_test', run_i=0):
         print('df_before_diff:\n', df)
 
         global df_before
+        print('df_before:\n', df_before)
         if df_before is None:
             df_before = df
         else:
@@ -450,11 +451,11 @@ def init_scaler():
                 print('df_pod_60min:\n', df_pod_60min)
 
                 df_node_60min = get_raw_data(
-                    df_node_60min, type='node', train=True)
+                    df_node_60min, type='node', train=False)
                 df_service_60min = get_raw_data(
-                    df_service_60min, type='service', train=True)
+                    df_service_60min, type='service', train=False)
                 df_pod_60min = get_raw_data(
-                    df_pod_60min, type='pod', train=True)
+                    df_pod_60min, type='pod', train=False)
 
                 df_60min = pd.concat(
                     [df_node_60min, df_service_60min, df_pod_60min], axis=1)
@@ -487,7 +488,7 @@ if __name__ == '__main__':
 
     elif type == 'online_test':
         data_deal()
-        schedule.every().minute.at(':59').do(main, type)
+        schedule.every().minute.at(':00').do(main, type)
         while True:
             try:
                 if INIT_FLAG:
@@ -495,14 +496,14 @@ if __name__ == '__main__':
                     schedule.clear()
                     print('init online std scaler...')
                     init_scaler()
-                    schedule.every().minute.at(':59').do(main, type)
+                    schedule.every().minute.at(':00').do(main, type)
 
                 if WAIT_FLAG:
                     WAIT_FLAG = False
                     schedule.clear()
                     print('wait for 10 minutes...')
                     time.sleep(60*10)
-                    schedule.every().minute.at(':59').do(main, type)
+                    schedule.every().minute.at(':00').do(main, type)
 
                 schedule.run_pending()
 
@@ -524,7 +525,7 @@ if __name__ == '__main__':
                 df_before = None
                 print('wait for 60s to recover...')
                 time.sleep(60)
-                schedule.every().minute.at(':59').do(main, type)
+                schedule.every().minute.at(':00').do(main, type)
 
     elif type == 'offline_test':
         for i in range(-3, 8):

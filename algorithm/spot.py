@@ -5,7 +5,7 @@ Version:
 Author: WangXingyu
 Date: 2022-04-23 18:49:49
 LastEditors: WangXingyu
-LastEditTime: 2022-04-30 15:15:17
+LastEditTime: 2022-04-30 16:43:28
 '''
 from math import floor, log
 
@@ -470,7 +470,7 @@ class SPOT:
             # try:
             data = norm_data[id].values
             if 'node' in id:
-                n_init = 1388
+                n_init = 1390
                 level = 0.99
             elif 'grpc' in id or 'http' in id:
                 n_init = 1430
@@ -486,16 +486,8 @@ class SPOT:
 
             results = self.run()
             res_thre = results['thresholds']
-            if id == 'recommendationservice-grpc':
-                threshold_list[id] = res_thre[-1]*10
-            elif id == 'shippingservice-grpc':
-                threshold_list[id] = res_thre[-1]*2
-            elif id in ['adservice-0', 'adservice-1', 'cartservice-0', 'cartservice-1', 'cartservice2-0']:
-                threshold_list[id] = res_thre[-1]/5
-            elif id == 'adservice-2':
-                threshold_list[id] = res_thre[-1]*3
-            else:
-                threshold_list[id] = res_thre[-1]
+            threshold_rate = joblib.load('./model/spot/threshold_rate.pkl')
+            threshold_list[id] = res_thre[-1]*threshold_rate[id]
             # except:
             #     print(id)
         thre_df = pd.DataFrame(threshold_list, index=[0])

@@ -5,13 +5,11 @@ Version:
 Author: WangXingyu
 Date: 2022-04-06 20:50:54
 LastEditors: WangXingyu
-LastEditTime: 2022-04-30 16:48:44
+LastEditTime: 2022-04-30 17:24:07
 '''
-import os
 import random
 import time
 import traceback
-from collections import defaultdict
 
 import joblib
 import numpy as np
@@ -26,8 +24,7 @@ from utils.data_process.consumer import data_deal, kpi_d, metric_d
 from utils.data_process.process_data import (get_raw_data, istio_kpis,
                                              node_kpis, nodes, noise_clean,
                                              pod_kpis, pods, process_data,
-                                             rca_kpis, service_kpis, services,
-                                             upsample)
+                                             rca_kpis, services, upsample)
 from utils.submit.submit import submit
 
 random.seed(42)

@@ -5,7 +5,7 @@ Version:
 Author: WangChengsen
 Date: 2022-04-21 22:40:10
 LastEditors: WangXingyu
-LastEditTime: 2022-04-29 12:04:29
+LastEditTime: 2022-04-30 13:37:35
 '''
 import os
 from collections import defaultdict
@@ -255,7 +255,9 @@ def process_data(df, type='online_test', path='./model/scaler/'):
 
     df_cmdb = df_cmdb[cmdbs]
     if type == 'train':
-        df_cmdb.to_csv('./data/df_57.csv')
+        df_cmdb.to_csv('./data/df_57_train.csv')
+    else:
+        df_cmdb.to_csv('./data/df_57_test.csv')
 
     df_kpi = df_kpi[node_pod_kpis]
 

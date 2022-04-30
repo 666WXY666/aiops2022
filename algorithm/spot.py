@@ -5,7 +5,7 @@ Version:
 Author: WangXingyu
 Date: 2022-04-23 18:49:49
 LastEditors: WangXingyu
-LastEditTime: 2022-04-28 22:38:29
+LastEditTime: 2022-04-30 15:15:17
 '''
 from math import floor, log
 
@@ -469,16 +469,33 @@ class SPOT:
         for id in cmdb:
             # try:
             data = norm_data[id].values
-            n_init = 1400
+            if 'node' in id:
+                n_init = 1388
+                level = 0.99
+            elif 'grpc' in id or 'http' in id:
+                n_init = 1430
+                level = 0.99
+            else:
+                n_init = 1425
+                level = 0.985
             init_data = np.sort(data[:1440])[:n_init]
-            _data = data[1440:]
+            _data = data[1440:1600]
 
             self.fit(init_data, _data)
-            self.initialize(level=0.9)
+            self.initialize(level=level)
 
             results = self.run()
             res_thre = results['thresholds']
-            threshold_list[id] = res_thre[-1]
+            if id == 'recommendationservice-grpc':
+                threshold_list[id] = res_thre[-1]*10
+            elif id == 'shippingservice-grpc':
+                threshold_list[id] = res_thre[-1]*2
+            elif id in ['adservice-0', 'adservice-1', 'cartservice-0', 'cartservice-1', 'cartservice2-0']:
+                threshold_list[id] = res_thre[-1]/5
+            elif id == 'adservice-2':
+                threshold_list[id] = res_thre[-1]*3
+            else:
+                threshold_list[id] = res_thre[-1]
             # except:
             #     print(id)
         thre_df = pd.DataFrame(threshold_list, index=[0])

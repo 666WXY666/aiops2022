@@ -5,7 +5,7 @@ Version:
 Author: WangXingyu
 Date: 2022-04-06 20:50:54
 LastEditors: WangXingyu
-LastEditTime: 2022-05-06 13:57:50
+LastEditTime: 2022-05-06 14:32:35
 '''
 import random
 import time
@@ -478,14 +478,14 @@ def init_scaler():
 
 
 if __name__ == '__main__':
-    type = 'online_test'
+    type = 'train'
     print('current type:', type)
     if type == 'train':
         main(type)
 
     elif type == 'online_test':
         data_deal()
-        schedule.every().minute.at(':00').do(main, type)
+        schedule.every().minute.at(':55').do(main, type)
         while True:
             try:
                 if INIT_FLAG:
@@ -502,14 +502,14 @@ if __name__ == '__main__':
                     fault_num = 0
                     current_check_time = -1
                     df_before = None
-                    schedule.every().minute.at(':00').do(main, type)
+                    schedule.every().minute.at(':55').do(main, type)
 
                 if WAIT_FLAG:
                     WAIT_FLAG = False
                     schedule.clear()
                     print('wait for 10 minutes...')
                     time.sleep(60*10)
-                    schedule.every().minute.at(':00').do(main, type)
+                    schedule.every().minute.at(':55').do(main, type)
 
                 schedule.run_pending()
 
@@ -531,7 +531,7 @@ if __name__ == '__main__':
                 df_before = None
                 print('wait for 60s to recover...')
                 time.sleep(60)
-                schedule.every().minute.at(':00').do(main, type)
+                schedule.every().minute.at(':55').do(main, type)
 
     elif type == 'offline_test':
         for i in range(-3, 8):
